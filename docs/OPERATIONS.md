@@ -175,6 +175,50 @@ Base URL: http://host.docker.internal:4000/v1
 API key: LiteLLM virtual key
 ```
 
+## Share OpenWebUI with Tailscale Funnel
+
+OpenWebUI is the recommended public sharing target for friends who need browser chat.
+
+First stop any old Funnel route:
+
+```powershell
+tailscale funnel --https=443 off
+```
+
+Start Funnel to OpenWebUI:
+
+```powershell
+tailscale funnel --bg --https=443 http://127.0.0.1:3000
+tailscale funnel status
+```
+
+Expected status should point `/` to OpenWebUI:
+
+```text
+https://armmy.tail35169a.ts.net (Funnel on)
+|-- / proxy http://127.0.0.1:3000
+```
+
+Open the public URL:
+
+```powershell
+Start-Process https://armmy.tail35169a.ts.net
+```
+
+New users sign in through OpenWebUI. Keep signup set to pending/manual approval when sharing publicly, then approve invited users in the OpenWebUI admin panel. Disable signup again after invited users have accounts.
+
+Do not publicly Funnel these admin or internal services unless they are intentionally secured:
+
+```text
+vLLM:       http://127.0.0.1:8000
+LiteLLM:    http://127.0.0.1:4000
+Grafana:    http://127.0.0.1:3002
+Prometheus: http://127.0.0.1:9090
+Dashboard:  http://127.0.0.1:8088/status
+```
+
+API users should receive LiteLLM virtual keys. Expose LiteLLM publicly only when API access is actually needed and the key/budget/rate-limit policy is ready.
+
 ## 5. Start Observability
 
 ```powershell
@@ -315,4 +359,4 @@ docker compose up -d --force-recreate litellm
 
 ## Compatibility Gateways
 
-The existing `website/` and `sharing/` flows remain available for demos and compatibility. LiteLLM is now the preferred gateway for new users, scripts, and benchmark runs.
+The existing `website/` and `sharing/` flows remain available for demos and compatibility. OpenWebUI and LiteLLM are now the preferred paths for new chat and API users.
