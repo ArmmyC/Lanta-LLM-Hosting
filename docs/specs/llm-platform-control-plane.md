@@ -1,396 +1,757 @@
-# Feature Spec: LLM Platform Control Plane and Benchmark Dashboard Foundation
+# Feature Spec: LLM Platform Control Plane - Phase 2 Operations, Model Sync, and Evaluation Maturity
 
 ## 1. Goal
 
-Build a production-oriented internal LLM platform around the existing Lanta/vLLM hosting repo.
+The first foundation of the Lanta LLM platform is now in place. The repository has OpenWebUI, LiteLLM, observability, benchmark, dashboard, and platform check tooling. The next milestone is to make the platform easier to operate daily, more transparent to admins, and more useful for comparing HDL-capable local LLMs.
 
-The platform should add:
+Phase 2 should focus on five outcomes:
 
-1. **OpenWebUI** as the main user-facing chat UI.
-2. **LiteLLM Proxy** as the central OpenAI-compatible API gateway for API keys, model routing, usage tracking, budgets, and rate limits.
-3. **Prometheus + Grafana** as the operations dashboard for concurrent requests, token usage, token/s, latency, RAM usage, GPU usage, tunnel status, and Slurm/vLLM health.
-4. **A custom benchmark/evaluation foundation** for HDL, RTL, testbench, and model comparison workflows.
-5. **A benchmark dashboard API and data model** that Codex can extend later into a full evaluation UI.
+1. **Reliable model identity and swap workflow**: when the active vLLM model changes on Lanta, local services should detect it, update the LiteLLM upstream model routing, and clearly show the real model name to admins.
+2. **Better observability**: Grafana should distinguish between local/container health, LiteLLM usage, vLLM tunnel health, and real Lanta GPU/Slurm state. GPU panels should be backed by real metrics, not placeholders.
+3. **Admin status visibility**: add a simple platform status view/API that shows the public model alias, real upstream vLLM model, tunnel health, LiteLLM health, OpenWebUI health, benchmark dashboard health, and observability health.
+4. **Benchmark maturity**: expand benchmark cases beyond smoke tests, improve scoring metadata, store both model alias and resolved upstream model, and make benchmark results easier to compare across model swaps.
+5. **Operations polish**: make startup, health checks, model swapping, and troubleshooting simple enough that a new intern or engineer can run the stack without guessing.
 
-The current repository already hosts Hugging Face models on Lanta through Slurm/vLLM and exposes a website or OpenAI-compatible API.  The new feature should evolve the repo from a model-hosting prototype into a private LLM platform for IC design and HDL benchmarking.
-
-OpenWebUI should connect to LiteLLM using the OpenAI-compatible API flow, because OpenWebUI officially supports servers implementing the OpenAI-compatible API and is built around the Chat Completions protocol. ([Open WebUI][1]) LiteLLM should sit between OpenWebUI and vLLM because LiteLLM supports virtual keys and usage controls. ([LiteLLM][2]) LiteLLM metrics should be scraped by Prometheus, because LiteLLM exposes Prometheus metrics when configured. ([LiteLLM][3])
-
-## 2. Non-goals
-
-This task should **not** build:
-
-1. A replacement for OpenWebUI’s full chat interface.
-2. A custom authentication system for OpenWebUI.
-3. A full public SaaS billing system.
-4. A polished external customer portal.
-5. Full synthesis-based area/power analysis in the first implementation.
-6. Multi-tenant enterprise RBAC beyond basic admin/user separation.
-7. A complete benchmark case library.
-8. A custom alternative to LiteLLM virtual keys.
-9. A full rewrite of existing Lanta Slurm scripts.
-10. A full replacement of the existing `website/` folder. Keep it as a fallback/demo UI.
-
-## 3. Assumptions
-
-1. The repository remains named `Lanta-LLM-Hosting`.
-2. The current Lanta/vLLM flow remains the inference backend.
-3. The local vLLM endpoint is still exposed through the existing SSH tunnel at:
+The current intended architecture remains:
 
 ```text
-http://127.0.0.1:8000/v1
+OpenWebUI -> LiteLLM -> local SSH tunnel -> vLLM on Lanta
 ```
 
-4. Only one vLLM model is served on port `8000` at a time in the current setup. The existing model swap docs say swapping cancels the previous `vllm-model` job and starts a new one on the same endpoint. 
-5. OpenWebUI should be the main UI for human users.
-6. LiteLLM should be the main gateway for OpenAI-compatible API access.
-7. The existing `sharing/authenticated-openai-gateway.mjs` can remain temporarily, but LiteLLM should become the preferred API gateway.
-8. The first benchmark implementation should support compile/simulation/checker-style evaluation, but can use placeholder evaluators when local HDL tools are unavailable.
-9. Prometheus should scrape metrics. Prometheus stores metrics as time-series data and uses an HTTP pull model. ([Prometheus][4])
-10. Grafana should visualize metrics from Prometheus. Grafana is intended for dashboarding and visualization over external data sources. ([Grafana Labs][5])
-11. Docker Compose is acceptable for local platform services.
-12. PostgreSQL should be used for LiteLLM and benchmark metadata.
-13. SQLite may be used only for local development fallback if PostgreSQL is unavailable.
-14. Existing PowerShell scripts for tunnel management should continue working.
-
-## 4. User stories
-
-* As an engineer, I want to open OpenWebUI and chat with the active Lanta model, so that I can use the private model without knowing Slurm, vLLM, or SSH tunnel commands.
-* As an engineer, I want the model list in OpenWebUI to show the active model, so that I can avoid sending prompts to the wrong model alias.
-* As an admin, I want to create API keys through LiteLLM, so that other users or tools can call the internal LLM endpoint securely.
-* As an admin, I want to see token usage per key and per model, so that I can monitor resource consumption.
-* As an admin, I want to see concurrent requests, request latency, token/s, errors, and active model status, so that I can diagnose system health.
-* As an admin, I want to see CPU, RAM, disk, GPU memory, GPU utilization, and tunnel status, so that I can understand whether failures are caused by infrastructure or model behavior.
-* As a benchmark maintainer, I want to run HDL benchmark cases against the active model, so that I can compare model quality.
-* As a benchmark maintainer, I want every benchmark result stored with prompt version, model name, token usage, generated code, compile status, simulation status, and failure reason, so that results are reproducible.
-* As a benchmark maintainer, I want to compare model performance across RTL generation, testbench generation, and debugging tasks, so that I can choose the best model for SiliconCraft workflows.
-* As a developer, I want a clear repo structure and docs, so that future Codex tasks can add features without guessing the architecture.
-
-## 5. UX / UI requirements
-
-### 5.1 OpenWebUI user experience
-
-OpenWebUI is the primary chat UI.
-
-Required behavior:
-
-1. Users open OpenWebUI in a browser.
-2. Users log in using OpenWebUI’s built-in user system.
-3. Users select the active LiteLLM model.
-4. Users chat normally.
-5. OpenWebUI sends requests to LiteLLM, not directly to vLLM.
-6. The existing custom `website/` remains available as a fallback demo UI.
-
-OpenWebUI connection target:
-
-```text
-http://litellm:4000/v1
-```
-
-For local Docker on Windows, document when to use:
-
-```text
-http://host.docker.internal:4000/v1
-```
-
-### 5.2 LiteLLM admin experience
-
-LiteLLM should expose an admin interface or documented CLI/API flow for:
-
-1. Creating API keys.
-2. Listing API keys.
-3. Revoking API keys.
-4. Setting allowed model aliases.
-5. Setting optional budgets.
-6. Viewing usage per key.
-7. Viewing usage per model.
-
-The UI must not expose the upstream vLLM API key or internal tunnel details to normal users.
-
-### 5.3 Grafana operations dashboard
-
-Create a Grafana dashboard folder with provisioned dashboards.
-
-Dashboard name:
-
-```text
-Lanta LLM Operations
-```
-
-Panels required:
-
-1. Current active model.
-2. LiteLLM request rate.
-3. Concurrent in-flight requests.
-4. Total requests.
-5. Error rate.
-6. p50 latency.
-7. p95 latency.
-8. Input tokens/min.
-9. Output tokens/min.
-10. Total tokens.
-11. Output token/s.
-12. Usage by API key or user where available.
-13. Usage by model alias.
-14. LiteLLM uptime.
-15. vLLM upstream health.
-16. SSH tunnel health.
-17. RAM usage.
-18. CPU usage.
-19. Disk usage.
-20. GPU utilization.
-21. GPU memory usage.
-22. Slurm job state.
-23. Active vLLM job ID.
-24. Last successful health check timestamp.
-
-States:
-
-* Empty state: show “No metrics yet. Generate a request through OpenWebUI or LiteLLM.”
-* Loading state: Grafana default loading spinner is acceptable.
-* Error state: panels should show no-data or query-error clearly.
-* Offline state: custom exporter should report `0` for health metrics and include labels where possible.
-
-Responsive behavior:
-
-* Dashboard should be readable on 1920x1080 desktop.
-* Mobile support is not required for the first version.
-* Panels should be grouped into rows:
-
-  * Inference
-  * Usage
-  * System
-  * Lanta/Slurm
-  * Benchmark
-
-### 5.4 Benchmark dashboard experience
-
-For this task, build the backend and minimal UI foundation only.
-
-Minimum UI can be one of:
-
-1. Streamlit app, or
-2. Simple FastAPI HTML templates, or
-3. Static HTML backed by API endpoints.
-
-Preferred first implementation:
-
-```text
-dashboard/
-  backend/ FastAPI
-  frontend/ simple server-rendered HTML or static minimal UI
-```
-
-Pages required:
-
-#### Page: Benchmark Overview
-
-Displays:
-
-1. Total benchmark runs.
-2. Latest run status.
-3. Pass rate by model.
-4. Compile pass rate.
-5. Simulation pass rate.
-6. Average latency.
-7. Average token usage.
-8. Common failure categories.
-
-Empty state:
-
-```text
-No benchmark runs yet. Run `python -m benchmark.runners.run_suite --suite smoke`.
-```
-
-#### Page: Benchmark Runs
-
-Displays table:
-
-1. Run ID.
-2. Created time.
-3. Suite name.
-4. Model alias.
-5. Prompt version.
-6. Status.
-7. Cases passed.
-8. Cases failed.
-9. Total cases.
-10. Duration.
-
-Clicking a run opens run detail.
-
-#### Page: Benchmark Run Detail
-
-Displays:
-
-1. Run metadata.
-2. Case results table.
-3. Generated RTL/testbench artifact links.
-4. Compile logs.
-5. Simulation logs.
-6. Failure reason.
-7. Token usage.
-8. Latency.
-
-#### Page: Case Detail
-
-Displays:
-
-1. Case name.
-2. Task type.
-3. Prompt input.
-4. Expected module/interface.
-5. Testbench/checker config.
-6. Latest results across models.
-
-## 6. Functional requirements
-
-### 6.1 OpenWebUI integration
-
-1. Add an `openwebui/` folder containing Docker Compose configuration.
-2. OpenWebUI must be configured to use LiteLLM as its OpenAI-compatible provider.
-3. OpenWebUI must not call vLLM directly.
-4. OpenWebUI configuration must use environment variables from `.env`.
-5. The docs must explain how to start OpenWebUI.
-6. The docs must explain how to connect OpenWebUI to LiteLLM manually through the admin panel if automatic environment configuration fails.
-7. The docs must explain that OpenWebUI handles user chats, but LiteLLM and Prometheus are the source of truth for usage metrics.
-
-### 6.2 LiteLLM integration
-
-8. Add a `litellm/` folder containing Docker Compose configuration.
-9. Add `litellm/config.yaml`.
-10. Add `litellm/.env.example`.
-11. LiteLLM must expose an OpenAI-compatible API at:
-
-```text
-http://127.0.0.1:4000/v1
-```
-
-12. LiteLLM must route requests to the existing local vLLM tunnel:
-
-```text
-http://host.docker.internal:8000/v1
-```
-
-or documented equivalent for Linux.
-
-13. LiteLLM must define at least one model alias:
+The current stable public LiteLLM alias remains:
 
 ```text
 active-lanta-model
 ```
 
-14. LiteLLM must use a master key from environment variable:
+The real upstream model is controlled by:
 
 ```text
-LITELLM_MASTER_KEY
+VLLM_MODEL_ID=openai/<model-id-returned-by-vllm>
 ```
 
-15. LiteLLM must use PostgreSQL for persistent key and usage data.
-16. LiteLLM must expose metrics for Prometheus.
-17. LiteLLM must log model name, request status, latency, and token usage when available.
-18. LiteLLM must support virtual API keys.
-19. The docs must show how to generate a user API key.
-20. The docs must show how to revoke a user API key.
-21. The docs must show how to call the API using curl.
-22. The docs must explain that “API generation” means generating and managing LiteLLM virtual keys.
+Phase 2 must preserve the stable alias for scripts and users, while making the real model name visible and easy to synchronize.
 
-### 6.3 Observability
+## 2. Current state snapshot
 
-23. Add an `observability/` folder.
-24. Add Prometheus configuration.
-25. Add Grafana provisioning configuration.
-26. Add at least one provisioned Grafana dashboard JSON.
-27. Prometheus must scrape LiteLLM metrics.
-28. Prometheus must scrape the custom platform exporter.
-29. The custom platform exporter must expose `/metrics`.
-30. The custom platform exporter must expose `/healthz`.
-31. The exporter must report whether the LiteLLM endpoint is reachable.
-32. The exporter must report whether the vLLM `/models` endpoint is reachable.
-33. The exporter must report the active model name if `/models` succeeds.
-34. The exporter must report current process RAM/CPU for the local machine if available.
-35. The exporter must report tunnel health by checking the configured vLLM base URL.
-36. The exporter must not crash if Slurm is unavailable locally.
-37. If Slurm is unavailable, Slurm metrics must report `unknown` or `0` health state.
-38. The exporter must support configuration through environment variables.
-39. The docs must explain how to open Grafana.
-40. The docs must explain default ports.
+This section documents the current repository state before Phase 2.
 
-### 6.4 Benchmark foundation
+### 2.1 Already implemented
 
-41. Add a `benchmark/` folder.
-42. Add benchmark case schema.
-43. Add benchmark result schema.
-44. Add at least one smoke benchmark case for RTL generation.
-45. Add at least one smoke benchmark case for testbench generation.
-46. Add a runner that can call LiteLLM using an OpenAI-compatible API.
-47. The runner must store each model response.
-48. The runner must extract code blocks from responses.
-49. The runner must classify missing-code failures.
-50. The runner must support timeout handling.
-51. The runner must store benchmark results in PostgreSQL.
-52. The runner must support a local JSON result output fallback.
-53. The runner must record prompt version.
-54. The runner must record model alias.
-55. The runner must record request start time and end time.
-56. The runner must record latency in milliseconds.
-57. The runner must record input tokens when available.
-58. The runner must record output tokens when available.
-59. The runner must record total tokens when available.
-60. The runner must record compile status.
-61. The runner must record simulation status.
-62. The runner must record failure category.
-63. The runner must record generated artifacts.
-64. The runner must support a `--dry-run` mode that validates cases without calling LiteLLM.
-65. The runner must support a `--suite smoke` command.
-66. The runner must support a `--model active-lanta-model` argument.
-67. The runner must support a `--prompt-version` argument.
-68. The runner must produce a nonzero exit code if any required case file is invalid.
-69. The runner must not produce a nonzero exit code merely because a model fails a benchmark case, unless `--fail-on-benchmark-fail` is passed.
-
-### 6.5 Benchmark dashboard backend
-
-70. Add a dashboard backend service.
-71. Backend must expose APIs for listing benchmark runs.
-72. Backend must expose APIs for reading one benchmark run.
-73. Backend must expose APIs for listing benchmark cases.
-74. Backend must expose APIs for reading one benchmark case.
-75. Backend must expose APIs for summary statistics.
-76. Backend must return JSON.
-77. Backend must validate IDs.
-78. Backend must return 404 for missing resources.
-79. Backend must not expose secrets.
-80. Backend must support CORS only for configured local origins.
-
-### 6.6 Documentation
-
-81. Add:
+The repository already has these major components:
 
 ```text
-docs/specs/llm-platform-control-plane.md
+litellm/              LiteLLM gateway, config, Docker Compose, .env example, README
+openwebui/            OpenWebUI Docker Compose and .env example
+observability/        Prometheus, Grafana, platform exporter, dashboard JSON
+benchmark/            HDL benchmark runner, cases, evaluators, storage, artifacts
+dashboard/            FastAPI benchmark dashboard/API
+scripts/check-platform.ps1
+                      Local health checker for vLLM, LiteLLM, OpenWebUI, exporter, dashboard
 ```
 
-82. Add or update:
+### 2.2 Current chat flow
 
 ```text
-docs/ARCHITECTURE.md
+User Browser
+  |
+  v
+OpenWebUI on http://127.0.0.1:3000
+  |
+  v
+LiteLLM on http://127.0.0.1:4000/v1
+  |
+  v
+host.docker.internal:8000/v1
+  |
+  v
+Windows SSH tunnel
+  |
+  v
+vLLM running on Lanta Slurm
+```
+
+### 2.3 Current model routing
+
+LiteLLM exposes a stable public model name:
+
+```text
+active-lanta-model
+```
+
+LiteLLM forwards that alias to the model configured by:
+
+```text
+VLLM_MODEL_ID
+```
+
+Example:
+
+```env
+VLLM_MODEL_ID=openai/qwen36-35b-a3b
+```
+
+This means the user or benchmark can always call:
+
+```text
+active-lanta-model
+```
+
+while the admin can change the real model behind it.
+
+### 2.4 Current observability
+
+Prometheus currently scrapes:
+
+```text
+litellm:4000/metrics
+platform-exporter:9108/metrics
+```
+
+The current Grafana dashboard already has panels for:
+
+1. Current active model.
+2. LiteLLM request rate.
+3. In-flight requests if LiteLLM exposes the metric.
+4. Total requests.
+5. Error rate.
+6. p50 and p95 latency.
+7. Input/output tokens per minute.
+8. Output token/s from LiteLLM metrics.
+9. Usage by API key/user.
+10. Usage by model alias.
+11. vLLM upstream health.
+12. SSH tunnel health.
+13. Local/container CPU/RAM/disk.
+14. Slurm job state if `squeue` is available.
+15. GPU panels using DCGM metric names, but without a real GPU exporter yet.
+
+### 2.5 Known gaps
+
+Phase 2 should address these gaps:
+
+1. Model swap is still manual after `submit-preset.sh`; `VLLM_MODEL_ID` must be updated and LiteLLM must be recreated.
+2. OpenWebUI shows `active-lanta-model`, not the true underlying vLLM model.
+3. There is no status page showing both public alias and real model.
+4. GPU panels exist but do not receive real Lanta GPU metrics.
+5. Slurm panels may not work from the local Docker exporter because the local container usually cannot run Lanta `squeue`.
+6. Benchmark results store the model alias, but not always the resolved upstream model at run time.
+7. Benchmark suite is still small and should grow toward RFID/digital IC workflows.
+8. There is no one-command model-sync tool.
+9. There is no one-command full stack startup script.
+10. OpenWebUI persistent provider settings can confuse users after `.env` changes.
+
+## 3. Non-goals
+
+Phase 2 should **not** build:
+
+1. A full public SaaS product.
+2. Billing or customer payment flows.
+3. Enterprise SSO or complex RBAC.
+4. A new chat UI replacing OpenWebUI.
+5. Full RTL synthesis, place-and-route, or accurate silicon area/power signoff.
+6. A new Slurm scheduler.
+7. A fully distributed Kubernetes platform.
+8. Automatic GPU exporter deployment requiring root/admin privileges on Lanta unless documented as optional.
+9. Destructive reset scripts that delete user data by default.
+10. A benchmark leaderboard claiming scientific validity without clear methodology and limitations.
+
+The existing `website/`, `sharing/`, `lanta/scripts/`, and `windows/tunnel/` folders must remain available.
+
+## 4. Assumptions
+
+1. The repository remains `ArmmyC/Lanta-LLM-Hosting`.
+2. The main local vLLM tunnel remains:
+
+```text
+http://127.0.0.1:8000/v1
+```
+
+3. Docker containers reach the local tunnel through:
+
+```text
+http://host.docker.internal:8000/v1
+```
+
+4. Only one vLLM model is served on port `8000` at a time in the current Lanta setup.
+5. Model swapping on Lanta still cancels the previous `vllm-model` Slurm job and starts another job on the same endpoint.
+6. OpenWebUI remains the main chat UI.
+7. LiteLLM remains the central API gateway.
+8. `active-lanta-model` remains the stable public model alias unless explicitly changed.
+9. Admins should see the real upstream model name somewhere clear, even if users keep using the stable alias.
+10. Prometheus and Grafana remain the monitoring stack.
+11. Benchmark dashboard remains separate from OpenWebUI.
+12. Benchmark local JSON storage remains acceptable for development.
+13. PostgreSQL remains the desired long-term storage for LiteLLM and benchmark metadata.
+14. `.env` files are local-only and must never be committed.
+15. The implementation should prefer clear PowerShell scripts for Windows local operations.
+
+## 5. User stories
+
+### 5.1 Engineer using chat
+
+* As an engineer, I want to open OpenWebUI and chat with the active Lanta model without knowing Slurm commands.
+* As an engineer, I want the UI or status page to tell me what real model is active, so I know whether I am using Qwen, DeepSeek, or another model.
+* As an engineer, I want model swaps to be reflected quickly, so I do not accidentally test the wrong model.
+
+### 5.2 Admin operating the stack
+
+* As an admin, I want to run one health check command and know whether vLLM, LiteLLM, OpenWebUI, observability, and dashboard are healthy.
+* As an admin, I want to run one model-sync command after swapping models on Lanta.
+* As an admin, I want a platform status page showing public alias, real upstream model, LiteLLM health, vLLM health, tunnel health, and last sync time.
+* As an admin, I want Grafana to show which panels are real and which require optional exporters.
+* As an admin, I want to see token usage and token/s from LiteLLM.
+* As an admin, I want real Lanta GPU usage if a Lanta-side exporter is enabled.
+
+### 5.3 Benchmark maintainer
+
+* As a benchmark maintainer, I want each benchmark run to record both `model_alias` and `resolved_upstream_model`, so results remain understandable after model swaps.
+* As a benchmark maintainer, I want more cases for RTL generation, testbench generation, debugging, and low-power rewrite tasks.
+* As a benchmark maintainer, I want failure categories that help me improve prompts and model choice.
+* As a benchmark maintainer, I want benchmark results visible in the dashboard without opening raw JSON files.
+
+### 5.4 Developer extending the repo
+
+* As a developer, I want clear docs explaining the flow and ownership of each component.
+* As a developer, I want scripts to fail safely and print actionable next steps.
+* As a developer, I want tests covering model sync, status APIs, benchmark scoring, and artifact path safety.
+
+## 6. UX / UI requirements
+
+### 6.1 OpenWebUI experience
+
+OpenWebUI remains the primary chat UI.
+
+Required behavior:
+
+1. Users open:
+
+```text
+http://127.0.0.1:3000
+```
+
+2. Users log in with OpenWebUI accounts.
+3. Users select a model exposed by LiteLLM.
+4. Users chat normally.
+5. OpenWebUI sends requests to LiteLLM, not directly to vLLM.
+6. OpenWebUI may continue to show `active-lanta-model` as the selectable model.
+7. A clear admin-facing status page must show the true upstream model.
+8. Docs must explain that OpenWebUI account login is separate from LiteLLM API keys.
+
+Recommended behavior:
+
+1. Keep `active-lanta-model` for user-facing stability.
+2. Do not force OpenWebUI to rename the model after every swap unless this can be done safely.
+3. Show the real active model in dashboard/Grafana/status page instead.
+4. Add docs explaining why stable alias is preferred for scripts and benchmarks.
+
+### 6.2 Model identity display
+
+The platform must expose three names clearly:
+
+```text
+public_alias: active-lanta-model
+litellm_model_id: openai/<real-vllm-model>
+vllm_reported_model_id: <model-returned-by-/v1/models>
+```
+
+Example:
+
+```json
+{
+  "public_alias": "active-lanta-model",
+  "litellm_model_id": "openai/qwen36-35b-a3b",
+  "vllm_reported_model_id": "qwen36-35b-a3b"
+}
+```
+
+This information should appear in at least one of:
+
+1. Benchmark dashboard status page.
+2. Grafana current active model panel.
+3. `scripts/check-platform.ps1` output.
+4. New `scripts/sync-active-model.ps1` output.
+
+### 6.3 Model swap experience
+
+Desired admin flow:
+
+```powershell
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+
+powershell -ExecutionPolicy Bypass -File .\scripts\sync-active-model.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
+`sync-active-model.ps1` should:
+
+1. Call `http://127.0.0.1:8000/v1/models`.
+2. Extract the current vLLM model id.
+3. Convert it to LiteLLM format by prefixing `openai/` unless already prefixed.
+4. Update `litellm/.env` value:
+
+```env
+VLLM_MODEL_ID=openai/<model-id>
+```
+
+5. Recreate the LiteLLM service by default or offer a `-NoRestart` flag.
+6. Print what changed.
+7. Never print secrets.
+8. Warn if OpenWebUI may need model refresh.
+
+### 6.4 Platform status page
+
+Add a lightweight status view to the dashboard backend.
+
+Minimum page:
+
+```text
+http://127.0.0.1:8088/status
+```
+
+Minimum API:
+
+```text
+GET /api/platform/status
+```
+
+Displayed fields:
+
+1. Public model alias.
+2. LiteLLM configured upstream model id.
+3. vLLM reported model id.
+4. LiteLLM health.
+5. vLLM tunnel health.
+6. OpenWebUI health.
+7. Platform exporter health.
+8. Prometheus health if reachable.
+9. Grafana health if reachable.
+10. Benchmark dashboard health.
+11. Last successful health check timestamp.
+12. Suggested fix if a component is down.
+
+### 6.5 Grafana operations dashboard
+
+Keep dashboard name:
+
+```text
+Lanta LLM Operations
+```
+
+Required rows:
+
+1. Inference.
+2. Usage.
+3. Local Platform.
+4. Lanta/Slurm.
+5. GPU if available.
+6. Benchmark.
+
+Required panel behavior:
+
+1. Token/s must be labeled as LiteLLM-observed token/s.
+2. GPU panels must clearly say when no GPU exporter is configured.
+3. Slurm panels must clearly say when Slurm cannot be checked from local Docker.
+4. Current active model must show the vLLM-reported model label.
+5. Model alias usage should show `active-lanta-model` separately from the resolved upstream model when possible.
+
+## 7. Functional requirements
+
+### 7.1 Model sync script
+
+Add:
+
+```text
+scripts/sync-active-model.ps1
+```
+
+Required options:
+
+```powershell
+.\scripts\sync-active-model.ps1
+.\scripts\sync-active-model.ps1 -NoRestart
+.\scripts\sync-active-model.ps1 -ExpectedModel qwen36-35b-a3b
+.\scripts\sync-active-model.ps1 -LiteLLMEnvPath .\litellm\.env
+```
+
+Required behavior:
+
+1. Read vLLM models from:
+
+```text
+http://127.0.0.1:8000/v1/models
+```
+
+2. If no model is returned, fail with a clear message.
+3. If multiple models are returned, choose the first by default and print a warning.
+4. Normalize the model for LiteLLM:
+
+```text
+qwen36-35b-a3b -> openai/qwen36-35b-a3b
+openai/qwen36-35b-a3b -> openai/qwen36-35b-a3b
+```
+
+5. Create `litellm/.env` from `.env.example` if missing, but ask the user to fill secrets if required.
+6. Update only the `VLLM_MODEL_ID` line.
+7. Preserve all other `.env` values and comments as much as practical.
+8. Print old model and new model.
+9. Recreate LiteLLM unless `-NoRestart` is used:
+
+```powershell
+cd .\litellm
+docker compose up -d --force-recreate litellm
+```
+
+10. Re-run basic LiteLLM health check after restart.
+11. Exit nonzero on failure.
+
+### 7.2 Platform check script improvements
+
+Update:
+
+```text
+scripts/check-platform.ps1
+```
+
+Add checks for:
+
+1. Current vLLM model id from `/v1/models`.
+2. Current `VLLM_MODEL_ID` from `litellm/.env`.
+3. Whether `VLLM_MODEL_ID` matches the vLLM reported model after removing `openai/` prefix.
+4. LiteLLM `/v1/models` includes `active-lanta-model`.
+5. LiteLLM `/metrics` is reachable.
+6. Prometheus `/-/ready` is reachable.
+7. Grafana `/api/health` is reachable.
+8. Dashboard `/api/platform/status` is reachable after that endpoint is implemented.
+
+Output format:
+
+```text
+PASS vLLM tunnel - HTTP 200, model=qwen36-35b-a3b
+PASS LiteLLM health - HTTP 200
+PASS LiteLLM model alias - active-lanta-model available
+PASS Model sync - VLLM_MODEL_ID=openai/qwen36-35b-a3b matches vLLM=qwen36-35b-a3b
+WARN GPU metrics - no DCGM exporter configured
+FAIL OpenWebUI homepage - connection refused
+```
+
+Rules:
+
+1. Do not print API keys.
+2. Print commands users can run to fix common problems.
+3. Use exit code `0` if all required checks pass.
+4. Use exit code `1` if required checks fail.
+5. Warnings should not fail the script unless `-Strict` is passed.
+
+### 7.3 LiteLLM configuration
+
+Keep:
+
+```text
+active-lanta-model
+```
+
+as the stable public alias.
+
+Keep `VLLM_MODEL_ID` in `litellm/.env.example`.
+
+Required behavior:
+
+1. `litellm/config.yaml` must use `os.environ/VLLM_MODEL_ID`.
+2. `litellm/README.md` must explain:
+   * public alias
+   * resolved upstream model
+   * how to change model
+   * how to sync automatically
+   * why OpenWebUI may continue showing the stable alias
+3. `litellm/docker-compose.yml` must pass `VLLM_MODEL_ID` into the container.
+4. Do not commit real `.env` files.
+
+Optional enhancement:
+
+Support a second visible model alias for the real model name, but only if it does not break existing benchmark commands or virtual key restrictions.
+
+Example optional config:
+
+```yaml
+model_list:
+  - model_name: active-lanta-model
+    litellm_params:
+      model: os.environ/VLLM_MODEL_ID
+      api_base: os.environ/VLLM_BASE_URL
+      api_key: os.environ/VLLM_API_KEY
+```
+
+If exposing the real model name as a second alias is implemented, document tradeoffs clearly.
+
+### 7.4 OpenWebUI behavior
+
+Do not make OpenWebUI directly call vLLM.
+
+OpenWebUI should continue using:
+
+```text
+http://litellm:4000/v1
+```
+
+Requirements:
+
+1. `openwebui/.env.example` must remain simple.
+2. Docs must explain first admin account creation.
+3. Docs must explain that OpenWebUI settings may persist after first launch.
+4. Docs must explain how to refresh or manually update the provider if `.env` changes are not reflected.
+5. Do not recommend deleting the OpenWebUI volume unless the user accepts losing chat/users/settings.
+
+### 7.5 Lanta-side observability exporter
+
+Add an optional Lanta-side exporter or script.
+
+Preferred path:
+
+```text
+lanta/scripts/lanta-metrics-exporter.py
+```
+
+Alternative acceptable path:
+
+```text
+observability/exporters/lanta_gpu_exporter.py
+```
+
+Required metrics:
+
+```text
+lanta_gpu_available
+lanta_gpu_utilization_percent
+lanta_gpu_memory_used_bytes
+lanta_gpu_memory_total_bytes
+lanta_gpu_power_watts
+lanta_gpu_temperature_celsius
+lanta_vllm_process_running
+lanta_vllm_process_gpu_memory_bytes
+lanta_slurm_job_running
+lanta_slurm_job_state
+lanta_slurm_job_runtime_seconds
+```
+
+Implementation options:
+
+1. Parse `nvidia-smi --query-gpu=... --format=csv,noheader,nounits`.
+2. Parse `squeue` for job state.
+3. Optionally parse `ps` for vLLM process.
+4. Expose `/metrics` over HTTP on a configurable port.
+5. Expose `/healthz`.
+
+Security constraints:
+
+1. Bind to localhost by default on Lanta.
+2. Do not expose publicly by default.
+3. Document SSH tunnel instructions if local Prometheus should scrape it.
+4. Do not require root privileges.
+5. If `nvidia-smi` is unavailable, export `lanta_gpu_available 0` and do not crash.
+
+### 7.6 Prometheus/Grafana upgrades
+
+Update Prometheus config to optionally scrape Lanta exporter.
+
+Example target through a local tunnel:
+
+```yaml
+- job_name: lanta-gpu-exporter
+  metrics_path: /metrics
+  static_configs:
+    - targets:
+        - host.docker.internal:9208
+```
+
+Grafana requirements:
+
+1. Keep existing panels for LiteLLM metrics.
+2. Add row title: `GPU / Lanta Node`.
+3. Add GPU utilization time series.
+4. Add GPU memory used/total.
+5. Add GPU power draw.
+6. Add GPU temperature.
+7. Add vLLM process running stat.
+8. Add Slurm job runtime stat.
+9. If metrics are missing, show a text panel explaining how to enable Lanta exporter.
+10. Label LiteLLM token/s as gateway-observed token/s.
+
+### 7.7 Benchmark runner improvements
+
+Update benchmark results to record resolved model identity.
+
+Add fields to result metadata or schema:
+
+```text
+public_model_alias
+resolved_upstream_model
+vllm_reported_model
+litellm_base_url
+vllm_base_url
+```
+
+Requirements:
+
+1. Before each benchmark run, call vLLM `/models` if reachable.
+2. Store the reported model id in run config or result metadata.
+3. Store `VLLM_MODEL_ID` if available.
+4. Store LiteLLM alias used by the request.
+5. Dashboard should display both alias and resolved model.
+6. If model changes during a run, mark run metadata with a warning.
+
+Add CLI option:
+
+```bash
+python -m benchmark.runners.run_suite --suite smoke --model active-lanta-model --record-platform-status
+```
+
+Default should be to record platform status if safe and fast.
+
+### 7.8 Benchmark case expansion
+
+Add a new suite:
+
+```text
+benchmark/cases/rfid_basic/
+```
+
+Minimum new cases:
+
+1. `edge_detector.yaml`
+   * RTL generation
+   * expected module: `edge_detector`
+   * checks reset, input synchronization, pulse output
+2. `clock_enable_counter.yaml`
+   * RTL generation
+   * low dynamic power focus
+   * checks enable behavior and no unnecessary toggling in code structure
+3. `spi_register_bank.yaml`
+   * RTL generation
+   * simple bus/register interface
+4. `uart_rx_debug.yaml`
+   * RTL debugging task with broken code input
+5. `rfid_crc16.yaml`
+   * RTL generation or debug
+   * checks deterministic combinational/sequential CRC behavior
+6. `testbench_edge_detector.yaml`
+   * testbench generation
+   * auxiliary DUT fixture
+   * requires `PASS` output
+7. `low_power_rewrite_counter.yaml`
+   * low-power rewrite task
+   * asks model to reduce toggling while preserving behavior
+
+Each case must include:
+
+```yaml
+id:
+title:
+task_type:
+description:
+prompt:
+expected_language: systemverilog
+expected_module_name:
+timeout_seconds:
+evaluator_config:
+  required_terms: []
+  expected_pass_text: PASS
+  forbidden_fail_text: FAIL
+```
+
+Use auxiliary fixtures where needed.
+
+### 7.9 Benchmark scoring improvements
+
+Keep the current simple evaluator, but add better metadata.
+
+Failure categories should include:
+
+```text
+none
+no_code_block
+wrong_module_name
+missing_required_term
+compile_error
+simulation_mismatch
+timeout
+upstream_error
+invalid_case
+tool_missing
+unknown
+```
+
+Do not use `missing_port` for general required terms.
+
+Scoring levels:
+
+```text
+1.0 = passed static + compile + simulation where applicable
+0.7 = static passed and compile tool missing
+0.5 = static passed but simulation unavailable
+0.0 = failed/error
+```
+
+If keeping binary score for now, document that it is binary and add score metadata for future expansion.
+
+### 7.10 Dashboard status and benchmark UI
+
+Add platform status endpoint:
+
+```text
+GET /api/platform/status
+```
+
+Add simple HTML page:
+
+```text
+/status
+```
+
+Add benchmark pages or improve existing pages to show:
+
+1. Latest run.
+2. Pass rate by real model.
+3. Pass rate by public alias.
+4. Compile pass rate.
+5. Simulation pass rate.
+6. Failure category distribution.
+7. Average latency.
+8. Average output tokens.
+9. Average output token/s if available.
+10. Artifact links.
+
+### 7.11 Operations docs
+
+Update:
+
+```text
 docs/OPERATIONS.md
 docs/BENCHMARKING.md
+docs/ARCHITECTURE.md
+README.md
+HOW_TO_SWAP.md
 ```
 
-83. Update root `README.md` with the new platform architecture.
-84. Existing `HOW_TO_USE.md` and `HOW_TO_SWAP.md` must remain valid.
-85. Documentation must state the startup order:
-86. Start Lanta vLLM job.
-87. Start tunnel.
-88. Start LiteLLM.
-89. Start OpenWebUI.
-90. Start observability stack.
-91. Run benchmark suite.
+Docs must explain:
 
-## 7. Technical requirements
+1. First local run.
+2. Startup order.
+3. `.env` file purpose for each service.
+4. Stable alias vs real upstream model.
+5. Running `sync-active-model.ps1` after model swap.
+6. Running `check-platform.ps1` after startup.
+7. Enabling optional Lanta GPU exporter.
+8. Difference between LiteLLM metrics and true GPU metrics.
+9. OpenWebUI admin account creation.
+10. Troubleshooting `curl: (52) Empty reply from server`.
+11. Troubleshooting wrong model name.
+12. Troubleshooting Docker not picking up `.env` changes.
+13. Safe local reset using `docker compose down -v` only when data loss is acceptable.
 
-### 7.1 Target architecture
+## 8. Technical architecture
+
+### 8.1 Current architecture
 
 ```text
 User Browser
@@ -405,250 +766,347 @@ LiteLLM Proxy
 Local SSH Tunnel
   |
   v
-vLLM on Lanta Slurm
-  |
-  v
-Active Hugging Face model
+vLLM on Lanta
 ```
 
-Monitoring path:
+### 8.2 Phase 2 target architecture
 
 ```text
-LiteLLM /metrics
-Platform exporter /metrics
-Node/system exporters if available
+User Browser
   |
   v
-Prometheus
+OpenWebUI
   |
   v
-Grafana
+LiteLLM Proxy  <----------------------+
+  |                                    |
+  v                                    |
+Local SSH Tunnel                       |
+  |                                    |
+  v                                    |
+vLLM on Lanta                         |
+  |                                    |
+  v                                    |
+Active Hugging Face Model             |
+                                       |
+Model Sync Script ---------------------+
+  |
+  v
+litellm/.env VLLM_MODEL_ID
 ```
 
-Benchmark path:
+Observability path:
 
 ```text
-Benchmark Runner
-  |
-  v
-LiteLLM /v1/chat/completions
-  |
-  v
-Generated response
-  |
-  v
-Code extraction
-  |
-  v
-Compile/simulate/check
-  |
-  v
-PostgreSQL
-  |
-  v
-Benchmark Dashboard API
+LiteLLM /metrics ---------------------+
+Platform exporter /metrics ----------+--> Prometheus --> Grafana
+Optional Lanta exporter /metrics -----+
 ```
 
-### 7.2 Data flow
+Dashboard/status path:
 
-#### Chat flow
-
-1. User sends message in OpenWebUI.
-2. OpenWebUI sends OpenAI-compatible request to LiteLLM.
-3. LiteLLM validates the key.
-4. LiteLLM routes to `active-lanta-model`.
-5. LiteLLM forwards to vLLM through the tunnel.
-6. vLLM streams or returns completion.
-7. LiteLLM logs usage and exposes metrics.
-8. OpenWebUI stores the chat session in its own database.
-
-#### API flow
-
-1. User or script calls LiteLLM `/v1/chat/completions`.
-2. User passes a LiteLLM virtual key.
-3. LiteLLM validates access.
-4. LiteLLM forwards to the active vLLM backend.
-5. LiteLLM records usage.
-
-#### Benchmark flow
-
-1. User runs:
-
-```bash
-python -m benchmark.runners.run_suite --suite smoke --model active-lanta-model
+```text
+Dashboard backend
+  |
+  +--> reads benchmark results
+  +--> checks LiteLLM/vLLM/OpenWebUI/exporter health
+  +--> exposes /api/platform/status
+  +--> serves /status
 ```
 
-2. Runner loads benchmark cases.
-3. Runner builds prompt from case + prompt template.
-4. Runner calls LiteLLM.
-5. Runner saves raw response.
-6. Runner extracts code block.
-7. Runner runs compile evaluator if available.
-8. Runner runs simulation evaluator if available.
-9. Runner stores result in database.
-10. Dashboard reads results from database.
+### 8.3 Model identity rules
 
-### 7.3 Permissions and security
+Definitions:
 
-1. LiteLLM master key must never be committed.
-2. OpenWebUI admin password must never be committed.
-3. Grafana admin password must never be committed.
-4. PostgreSQL password must never be committed.
-5. `.env.example` may contain placeholder values only.
-6. Generated API keys must not be printed into committed logs.
-7. The old `sharing/` gateway may remain, but docs should mark LiteLLM as preferred.
-8. CORS must default to local-only where practical.
-9. OpenWebUI should not expose LiteLLM master key to normal users.
-10. Benchmark artifacts may contain proprietary prompts or generated code, so docs must warn not to commit real benchmark results unless approved.
-11. Add `.gitignore` entries for:
-
-    * benchmark result artifacts
-    * local database files
-    * logs
-    * generated secrets
-    * Grafana local volume data
-    * Prometheus local volume data
-
-### 7.4 Validation rules
-
-Benchmark case validation:
-
-1. `id` is required and must match:
-
-```regex
-^[a-z0-9][a-z0-9_-]{2,80}$
+```text
+public_alias = model name users/scripts call through LiteLLM
+litellm_model_id = provider-prefixed model sent by LiteLLM to vLLM
+vllm_reported_model_id = model id returned by vLLM /v1/models
 ```
 
-2. `title` is required.
-3. `task_type` must be one of:
+Example:
 
-   * `rtl_generation`
-   * `testbench_generation`
-   * `rtl_debugging`
-   * `low_power_rewrite`
-4. `prompt` is required.
-5. `expected_language` must default to `systemverilog`.
-6. `expected_module_name` is required for RTL generation cases.
-7. `timeout_seconds` must be between `1` and `600`.
-8. Evaluator config is optional but must be valid JSON/YAML if present.
+```text
+public_alias = active-lanta-model
+litellm_model_id = openai/qwen36-35b-a3b
+vllm_reported_model_id = qwen36-35b-a3b
+```
 
-Benchmark result validation:
+Rules:
 
-1. `run_id` is required.
-2. `case_id` is required.
-3. `model_alias` is required.
-4. `status` must be one of:
+1. `public_alias` should remain stable.
+2. `litellm_model_id` should be updated after model swaps.
+3. `vllm_reported_model_id` is the source of truth for what is actually running.
+4. Health checks should warn if `litellm_model_id` suffix does not match `vllm_reported_model_id`.
+5. Benchmarks should record all three when possible.
 
-   * `passed`
-   * `failed`
-   * `error`
-   * `skipped`
-5. `failure_category` must be nullable or one of:
+## 9. Data model additions
 
-   * `none`
-   * `no_code_block`
-   * `wrong_module_name`
-   * `missing_port`
-   * `syntax_error`
-   * `compile_error`
-   * `simulation_mismatch`
-   * `timeout`
-   * `upstream_error`
-   * `invalid_case`
-   * `unknown`
+### 9.1 Benchmark run metadata
 
-## 8. Files likely involved
+Add to `benchmark_runs.config` or equivalent structured metadata:
+
+```json
+{
+  "public_model_alias": "active-lanta-model",
+  "resolved_upstream_model": "openai/qwen36-35b-a3b",
+  "vllm_reported_model": "qwen36-35b-a3b",
+  "litellm_base_url": "http://127.0.0.1:4000/v1",
+  "vllm_base_url": "http://127.0.0.1:8000/v1",
+  "platform_status_checked_at": "2026-06-14T00:00:00Z",
+  "model_sync_warning": null
+}
+```
+
+### 9.2 Platform status response model
+
+Define a status object:
+
+```json
+{
+  "timestamp": "2026-06-14T00:00:00Z",
+  "overall_status": "ok",
+  "model": {
+    "public_alias": "active-lanta-model",
+    "litellm_model_id": "openai/qwen36-35b-a3b",
+    "vllm_reported_model_id": "qwen36-35b-a3b",
+    "model_sync_status": "ok"
+  },
+  "components": {
+    "litellm": { "status": "ok", "latency_ms": 25, "message": "ok" },
+    "vllm": { "status": "ok", "latency_ms": 40, "message": "ok" },
+    "openwebui": { "status": "ok", "latency_ms": 30, "message": "ok" },
+    "platform_exporter": { "status": "ok", "latency_ms": 5, "message": "ok" },
+    "prometheus": { "status": "ok", "latency_ms": 12, "message": "ok" },
+    "grafana": { "status": "ok", "latency_ms": 20, "message": "ok" },
+    "dashboard": { "status": "ok", "latency_ms": 5, "message": "ok" }
+  },
+  "warnings": []
+}
+```
+
+Allowed component status:
+
+```text
+ok
+degraded
+down
+unknown
+```
+
+Allowed overall status:
+
+```text
+ok
+degraded
+down
+unknown
+```
+
+### 9.3 Lanta exporter metrics
+
+Use Prometheus text format.
+
+Required metric examples:
+
+```text
+lanta_gpu_available 1
+lanta_gpu_utilization_percent{gpu="0",name="NVIDIA H100"} 72
+lanta_gpu_memory_used_bytes{gpu="0"} 42362470400
+lanta_gpu_memory_total_bytes{gpu="0"} 84934656000
+lanta_gpu_power_watts{gpu="0"} 512
+lanta_gpu_temperature_celsius{gpu="0"} 66
+lanta_vllm_process_running 1
+lanta_slurm_job_running{job_id="123456",state="RUNNING",node="gpu-node-1"} 1
+lanta_slurm_job_runtime_seconds{job_id="123456"} 3600
+```
+
+## 10. API contract
+
+### 10.1 Platform status
+
+Name: Platform Status
+
+Method:
+
+```text
+GET
+```
+
+Path:
+
+```text
+/api/platform/status
+```
+
+Query params:
+
+```text
+include_details optional boolean default true
+```
+
+Success response:
+
+```json
+{
+  "timestamp": "2026-06-14T00:00:00Z",
+  "overall_status": "ok",
+  "model": {
+    "public_alias": "active-lanta-model",
+    "litellm_model_id": "openai/qwen36-35b-a3b",
+    "vllm_reported_model_id": "qwen36-35b-a3b",
+    "model_sync_status": "ok"
+  },
+  "components": {
+    "litellm": { "status": "ok", "latency_ms": 25, "message": "ok" },
+    "vllm": { "status": "ok", "latency_ms": 40, "message": "ok" },
+    "openwebui": { "status": "ok", "latency_ms": 30, "message": "ok" },
+    "platform_exporter": { "status": "ok", "latency_ms": 5, "message": "ok" },
+    "prometheus": { "status": "ok", "latency_ms": 12, "message": "ok" },
+    "grafana": { "status": "ok", "latency_ms": 20, "message": "ok" },
+    "dashboard": { "status": "ok", "latency_ms": 5, "message": "ok" }
+  },
+  "warnings": []
+}
+```
+
+Degraded response example:
+
+```json
+{
+  "timestamp": "2026-06-14T00:00:00Z",
+  "overall_status": "degraded",
+  "model": {
+    "public_alias": "active-lanta-model",
+    "litellm_model_id": "openai/qwen36-27b",
+    "vllm_reported_model_id": "qwen36-35b-a3b",
+    "model_sync_status": "mismatch"
+  },
+  "components": {
+    "litellm": { "status": "ok", "latency_ms": 25, "message": "ok" },
+    "vllm": { "status": "ok", "latency_ms": 40, "message": "ok" }
+  },
+  "warnings": [
+    "LiteLLM VLLM_MODEL_ID does not match the model reported by vLLM. Run scripts/sync-active-model.ps1."
+  ]
+}
+```
+
+Status codes:
+
+```text
+200 status returned even if degraded
+500 status endpoint crashed unexpectedly
+```
+
+### 10.2 Platform status page
+
+Name: Platform Status Page
+
+Method:
+
+```text
+GET
+```
+
+Path:
+
+```text
+/status
+```
+
+Behavior:
+
+1. Render readable HTML.
+2. Do not require JavaScript.
+3. Do not expose secrets.
+4. Show PASS/WARN/FAIL states.
+5. Link to OpenWebUI, Grafana, Prometheus, and benchmark dashboard pages.
+
+### 10.3 Model sync status CLI contract
+
+Script:
+
+```text
+scripts/sync-active-model.ps1
+```
+
+Success output should include:
+
+```text
+Detected vLLM model: qwen36-35b-a3b
+Current LiteLLM VLLM_MODEL_ID: openai/qwen36-27b
+Updated LiteLLM VLLM_MODEL_ID: openai/qwen36-35b-a3b
+Recreated LiteLLM service: ok
+LiteLLM health: ok
+```
+
+Failure output should include:
+
+```text
+FAIL Could not read http://127.0.0.1:8000/v1/models
+Next step: check the Lanta job and SSH tunnel.
+```
+
+## 11. Files likely involved
 
 Create:
 
 ```text
-docs/specs/llm-platform-control-plane.md
-docs/ARCHITECTURE.md
-docs/OPERATIONS.md
-docs/BENCHMARKING.md
+scripts/sync-active-model.ps1
 
-openwebui/
-  docker-compose.yml
-  .env.example
-  README.md
+lanta/scripts/lanta-metrics-exporter.py
+# or
+observability/exporters/lanta_gpu_exporter.py
 
-litellm/
-  docker-compose.yml
-  config.yaml
-  .env.example
-  README.md
-
-observability/
-  docker-compose.yml
-  README.md
-  prometheus/
-    prometheus.yml
-  grafana/
-    provisioning/
-      datasources/
-        prometheus.yml
-      dashboards/
-        dashboards.yml
-    dashboards/
-      lanta-llm-operations.json
-  exporters/
-    platform_exporter.py
-    requirements.txt
-    Dockerfile
-
-benchmark/
-  __init__.py
-  cases/
-    smoke/
-      rtl_counter.yaml
-      testbench_counter.yaml
-  prompts/
-    rfid_low_power_v1.md
-    generic_sv_v1.md
-  runners/
-    __init__.py
-    run_suite.py
-  evaluators/
-    __init__.py
-    extract_code.py
-    compile_sv.py
-    simulate.py
-    score.py
-  schemas/
-    case.schema.json
-    result.schema.json
-  storage/
-    __init__.py
-    db.py
-    models.py
-    migrations/
-  artifacts/
-    .gitkeep
-
-dashboard/
-  backend/
-    app/
-      main.py
-      database.py
-      routers/
-        health.py
-        benchmark_runs.py
-        benchmark_cases.py
-        summary.py
-      schemas.py
-    requirements.txt
-    Dockerfile
-  README.md
+dashboard/backend/app/routers/platform_status.py
 ```
 
 Modify:
 
 ```text
 README.md
-.gitignore
-HOW_TO_USE.md
+docs/ARCHITECTURE.md
+docs/OPERATIONS.md
+docs/BENCHMARKING.md
 HOW_TO_SWAP.md
-sharing/README.md if present
+scripts/check-platform.ps1
+litellm/README.md
+litellm/.env.example
+litellm/config.yaml
+observability/README.md
+observability/.env.example
+observability/docker-compose.yml
+observability/prometheus/prometheus.yml
+observability/grafana/dashboards/lanta-llm-operations.json
+benchmark/runners/run_suite.py
+benchmark/storage/models.py
+benchmark/storage/db.py
+benchmark/schemas/result.schema.json
+dashboard/backend/app/main.py
+dashboard/backend/app/schemas.py
+dashboard/backend/app/routers/pages.py
+tests/test_benchmark_core.py
+tests/test_dashboard_helpers.py
+tests/test_platform_exporter.py
+```
+
+Add benchmark cases:
+
+```text
+benchmark/cases/rfid_basic/
+  edge_detector.yaml
+  clock_enable_counter.yaml
+  spi_register_bank.yaml
+  uart_rx_debug.yaml
+  rfid_crc16.yaml
+  testbench_edge_detector.yaml
+  low_power_rewrite_counter.yaml
+
+benchmark/fixtures/
+  edge_detector.sv
+  broken_uart_rx.sv
+  crc16_reference.sv
 ```
 
 Do not delete:
@@ -660,823 +1118,122 @@ lanta/scripts/
 windows/tunnel/
 ```
 
-## 9. Data model
-
-Use PostgreSQL.
-
-### 9.1 Table: `benchmark_suites`
-
-Fields:
-
-```text
-id UUID primary key
-name TEXT not null unique
-description TEXT nullable
-created_at TIMESTAMPTZ not null default now()
-updated_at TIMESTAMPTZ not null default now()
-```
-
-Indexes:
-
-```text
-unique(name)
-```
-
-### 9.2 Table: `benchmark_cases`
-
-Fields:
-
-```text
-id TEXT primary key
-suite_id UUID nullable references benchmark_suites(id)
-title TEXT not null
-task_type TEXT not null
-description TEXT nullable
-prompt TEXT not null
-expected_language TEXT not null default 'systemverilog'
-expected_module_name TEXT nullable
-timeout_seconds INTEGER not null default 120
-evaluator_config JSONB not null default '{}'
-case_file_path TEXT nullable
-created_at TIMESTAMPTZ not null default now()
-updated_at TIMESTAMPTZ not null default now()
-```
-
-Indexes:
-
-```text
-index(task_type)
-index(suite_id)
-index(expected_module_name)
-```
-
-### 9.3 Table: `prompt_versions`
-
-Fields:
-
-```text
-id UUID primary key
-name TEXT not null unique
-description TEXT nullable
-content TEXT not null
-content_sha256 TEXT not null
-created_at TIMESTAMPTZ not null default now()
-```
-
-Indexes:
-
-```text
-unique(name)
-unique(content_sha256)
-```
-
-### 9.4 Table: `benchmark_runs`
-
-Fields:
-
-```text
-id UUID primary key
-suite_name TEXT not null
-model_alias TEXT not null
-prompt_version TEXT not null
-status TEXT not null
-started_at TIMESTAMPTZ not null
-finished_at TIMESTAMPTZ nullable
-duration_ms INTEGER nullable
-total_cases INTEGER not null default 0
-passed_cases INTEGER not null default 0
-failed_cases INTEGER not null default 0
-error_cases INTEGER not null default 0
-config JSONB not null default '{}'
-created_by TEXT nullable
-created_at TIMESTAMPTZ not null default now()
-```
-
-Allowed `status`:
-
-```text
-running
-completed
-failed
-cancelled
-```
-
-Indexes:
-
-```text
-index(started_at)
-index(model_alias)
-index(prompt_version)
-index(status)
-```
-
-### 9.5 Table: `benchmark_results`
-
-Fields:
-
-```text
-id UUID primary key
-run_id UUID not null references benchmark_runs(id) on delete cascade
-case_id TEXT not null references benchmark_cases(id)
-model_alias TEXT not null
-prompt_version TEXT not null
-status TEXT not null
-failure_category TEXT nullable
-failure_message TEXT nullable
-request_started_at TIMESTAMPTZ nullable
-request_finished_at TIMESTAMPTZ nullable
-latency_ms INTEGER nullable
-input_tokens INTEGER nullable
-output_tokens INTEGER nullable
-total_tokens INTEGER nullable
-raw_response_path TEXT nullable
-extracted_code_path TEXT nullable
-compile_status TEXT nullable
-compile_log_path TEXT nullable
-simulation_status TEXT nullable
-simulation_log_path TEXT nullable
-score NUMERIC nullable
-metadata JSONB not null default '{}'
-created_at TIMESTAMPTZ not null default now()
-```
-
-Allowed `status`:
-
-```text
-passed
-failed
-error
-skipped
-```
-
-Allowed `compile_status`:
-
-```text
-not_run
-passed
-failed
-tool_missing
-timeout
-```
-
-Allowed `simulation_status`:
-
-```text
-not_run
-passed
-failed
-tool_missing
-timeout
-```
-
-Indexes:
-
-```text
-index(run_id)
-index(case_id)
-index(model_alias)
-index(prompt_version)
-index(status)
-index(failure_category)
-```
-
-### 9.6 Table: `platform_health_checks`
-
-Fields:
-
-```text
-id UUID primary key
-checked_at TIMESTAMPTZ not null default now()
-component TEXT not null
-status TEXT not null
-latency_ms INTEGER nullable
-message TEXT nullable
-metadata JSONB not null default '{}'
-```
-
-Allowed `component`:
-
-```text
-litellm
-vllm
-ssh_tunnel
-slurm
-postgres
-prometheus
-grafana
-```
-
-Allowed `status`:
-
-```text
-ok
-degraded
-down
-unknown
-```
-
-Indexes:
-
-```text
-index(checked_at)
-index(component)
-index(status)
-```
-
-### 9.7 Migration requirements
-
-1. Provide SQL migrations or SQLAlchemy/Alembic migrations.
-2. Migrations must be idempotent in local development.
-3. The initial migration must create all benchmark tables.
-4. The migration process must be documented in `docs/BENCHMARKING.md`.
-5. No migration should delete existing user data.
-
-## 10. API contract
-
-### 10.1 Health check
-
-Name: Dashboard Health
-Method: `GET`
-Path: `/api/healthz`
-
-Request body:
-
-```json
-{}
-```
-
-Response body:
-
-```json
-{
-  "ok": true,
-  "service": "benchmark-dashboard",
-  "database": "ok",
-  "timestamp": "2026-06-14T00:00:00Z"
-}
-```
-
-Error cases:
-
-```json
-{
-  "ok": false,
-  "service": "benchmark-dashboard",
-  "database": "down",
-  "error": "database connection failed"
-}
-```
-
-Status codes:
-
-```text
-200 if healthy
-503 if unhealthy
-```
-
-### 10.2 List benchmark runs
-
-Name: List Benchmark Runs
-Method: `GET`
-Path: `/api/benchmark/runs`
-
-Query params:
-
-```text
-limit optional integer default 50 max 200
-offset optional integer default 0
-model_alias optional string
-prompt_version optional string
-status optional string
-suite_name optional string
-```
-
-Response body:
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "suite_name": "smoke",
-      "model_alias": "active-lanta-model",
-      "prompt_version": "rfid_low_power_v1",
-      "status": "completed",
-      "started_at": "2026-06-14T00:00:00Z",
-      "finished_at": "2026-06-14T00:01:00Z",
-      "duration_ms": 60000,
-      "total_cases": 2,
-      "passed_cases": 1,
-      "failed_cases": 1,
-      "error_cases": 0
-    }
-  ],
-  "limit": 50,
-  "offset": 0,
-  "total": 1
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "invalid_query",
-  "detail": "limit must be between 1 and 200"
-}
-```
-
-Status codes:
-
-```text
-200 success
-400 invalid query
-500 database error
-```
-
-### 10.3 Get benchmark run detail
-
-Name: Get Benchmark Run
-Method: `GET`
-Path: `/api/benchmark/runs/{run_id}`
-
-Response body:
-
-```json
-{
-  "id": "uuid",
-  "suite_name": "smoke",
-  "model_alias": "active-lanta-model",
-  "prompt_version": "rfid_low_power_v1",
-  "status": "completed",
-  "started_at": "2026-06-14T00:00:00Z",
-  "finished_at": "2026-06-14T00:01:00Z",
-  "duration_ms": 60000,
-  "total_cases": 2,
-  "passed_cases": 1,
-  "failed_cases": 1,
-  "error_cases": 0,
-  "results": [
-    {
-      "id": "uuid",
-      "case_id": "rtl_counter",
-      "status": "passed",
-      "failure_category": null,
-      "latency_ms": 12000,
-      "input_tokens": 800,
-      "output_tokens": 1200,
-      "total_tokens": 2000,
-      "compile_status": "passed",
-      "simulation_status": "passed",
-      "score": 1.0
-    }
-  ]
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "not_found",
-  "detail": "benchmark run not found"
-}
-```
-
-Status codes:
-
-```text
-200 success
-404 missing run
-500 database error
-```
-
-### 10.4 List benchmark cases
-
-Name: List Benchmark Cases
-Method: `GET`
-Path: `/api/benchmark/cases`
-
-Query params:
-
-```text
-suite_name optional string
-task_type optional string
-limit optional integer default 100 max 500
-offset optional integer default 0
-```
-
-Response body:
-
-```json
-{
-  "items": [
-    {
-      "id": "rtl_counter",
-      "title": "Low-power enabled counter",
-      "task_type": "rtl_generation",
-      "expected_language": "systemverilog",
-      "expected_module_name": "lp_counter",
-      "timeout_seconds": 120
-    }
-  ],
-  "limit": 100,
-  "offset": 0,
-  "total": 1
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "invalid_query",
-  "detail": "unsupported task_type"
-}
-```
-
-### 10.5 Get benchmark case
-
-Name: Get Benchmark Case
-Method: `GET`
-Path: `/api/benchmark/cases/{case_id}`
-
-Response body:
-
-```json
-{
-  "id": "rtl_counter",
-  "title": "Low-power enabled counter",
-  "task_type": "rtl_generation",
-  "description": "Generate a synthesizable low-power counter with enable.",
-  "prompt": "Create a SystemVerilog module...",
-  "expected_language": "systemverilog",
-  "expected_module_name": "lp_counter",
-  "timeout_seconds": 120,
-  "evaluator_config": {},
-  "latest_results": [
-    {
-      "run_id": "uuid",
-      "model_alias": "active-lanta-model",
-      "prompt_version": "rfid_low_power_v1",
-      "status": "passed",
-      "created_at": "2026-06-14T00:00:00Z"
-    }
-  ]
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "not_found",
-  "detail": "benchmark case not found"
-}
-```
-
-### 10.6 Summary statistics
-
-Name: Benchmark Summary
-Method: `GET`
-Path: `/api/benchmark/summary`
-
-Query params:
-
-```text
-since optional ISO datetime
-model_alias optional string
-prompt_version optional string
-suite_name optional string
-```
-
-Response body:
-
-```json
-{
-  "total_runs": 10,
-  "total_results": 100,
-  "pass_rate": 0.72,
-  "compile_pass_rate": 0.81,
-  "simulation_pass_rate": 0.64,
-  "average_latency_ms": 15500,
-  "average_total_tokens": 2400,
-  "by_model": [
-    {
-      "model_alias": "active-lanta-model",
-      "total_results": 100,
-      "pass_rate": 0.72,
-      "compile_pass_rate": 0.81,
-      "simulation_pass_rate": 0.64
-    }
-  ],
-  "failure_categories": [
-    {
-      "failure_category": "syntax_error",
-      "count": 8
-    }
-  ]
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "invalid_query",
-  "detail": "since must be an ISO datetime"
-}
-```
-
-### 10.7 Artifact access
-
-Name: Get Benchmark Artifact
-Method: `GET`
-Path: `/api/benchmark/artifacts/{result_id}/{artifact_type}`
-
-Allowed `artifact_type`:
-
-```text
-raw_response
-extracted_code
-compile_log
-simulation_log
-```
-
-Response body:
-
-```json
-{
-  "result_id": "uuid",
-  "artifact_type": "extracted_code",
-  "content_type": "text/plain",
-  "content": "module lp_counter (...); endmodule"
-}
-```
-
-Error cases:
-
-```json
-{
-  "error": "not_found",
-  "detail": "artifact not found"
-}
-```
-
-Security requirement:
-
-* Do not allow arbitrary file paths.
-* Resolve artifacts only from database paths under the configured artifact root.
-* Reject path traversal attempts.
-
-## 11. Edge cases
-
-1. vLLM tunnel is down.
-2. LiteLLM is up but vLLM is unreachable.
-3. OpenWebUI is up but LiteLLM is down.
-4. `/models` endpoint fails even though `/chat/completions` works.
-5. Active model name changes after a Slurm swap.
-6. Model swap happens during benchmark run.
-7. LiteLLM returns no token usage.
-8. LiteLLM streams a response but connection drops mid-stream.
-9. Model returns no code block.
-10. Model returns multiple code blocks.
-11. Model returns Verilog instead of SystemVerilog.
-12. Model uses wrong module name.
-13. Model response is too long.
-14. Benchmark case YAML is invalid.
-15. Benchmark case references missing files.
-16. Compile tool is not installed.
-17. Simulation tool is not installed.
-18. Compile times out.
-19. Simulation times out.
-20. PostgreSQL is unavailable.
-21. Prometheus starts before LiteLLM.
-22. Grafana starts before Prometheus.
-23. Platform exporter cannot call Slurm commands on Windows.
-24. GPU exporter is unavailable locally.
-25. User commits local `.env` accidentally. Add `.gitignore` protection.
-26. API key is invalid.
-27. API key is valid but has no model access.
-28. Request exceeds configured rate limit.
-29. User sends concurrent benchmark runs.
-30. Benchmark artifact file is missing but database row exists.
-
-## 12. Testing plan
-
-### 12.1 Unit tests
+## 12. Edge cases
+
+1. vLLM tunnel is down during model sync.
+2. vLLM `/models` returns empty data.
+3. vLLM `/models` returns multiple models.
+4. `litellm/.env` is missing.
+5. `litellm/.env` exists but has no `VLLM_MODEL_ID`.
+6. `.env` has duplicate `VLLM_MODEL_ID` lines.
+7. Docker is not running.
+8. Docker Compose command fails.
+9. LiteLLM takes time to restart and initially returns empty reply.
+10. OpenWebUI still shows old model list due to persistent settings.
+11. User changed `LITELLM_MASTER_KEY` but did not update OpenWebUI API key.
+12. Postgres volume keeps old password after `.env` change.
+13. Prometheus starts before exporters.
+14. Grafana starts before Prometheus.
+15. Lanta exporter is not enabled.
+16. `nvidia-smi` is not available.
+17. Lanta exporter runs on login node instead of GPU node.
+18. Slurm job is pending, not running.
+19. Slurm job is running but vLLM not ready yet.
+20. Model swap happens during benchmark run.
+21. Benchmark run records alias but model changes before completion.
+22. LiteLLM token metrics are missing or renamed by LiteLLM version change.
+23. API key/user label in metrics is missing.
+24. Dashboard cannot reach Grafana because of container networking.
+25. Health check should not expose secrets in error messages.
+
+## 13. Testing plan
+
+### 13.1 Unit tests
 
 Add tests for:
 
-1. Benchmark case schema validation.
-2. Result schema validation.
-3. Code block extraction.
-4. Failure category classification.
-5. Artifact path safety.
-6. LiteLLM client request construction.
-7. Token usage parsing.
-8. Summary statistics calculation.
-9. Platform exporter metric formatting.
-10. Health check status mapping.
+1. Parsing vLLM `/models` response.
+2. Normalizing model id to `openai/<model>`.
+3. Updating `VLLM_MODEL_ID` in `.env` content.
+4. Preserving unrelated `.env` lines.
+5. Detecting model mismatch.
+6. Platform status aggregation.
+7. Dashboard status schema.
+8. Benchmark metadata includes resolved model.
+9. Lanta exporter metric formatting.
+10. GPU exporter behavior when `nvidia-smi` is missing.
+11. Slurm parser for `squeue` output.
+12. Artifact path safety still rejects traversal.
+13. Benchmark failure category naming.
 
-Example test cases:
+Example test names:
 
 ```text
-extract_code should return first SystemVerilog code block
-extract_code should return largest code block if no language tag exists
-extract_code should classify empty response as no_code_block
-artifact resolver should reject ../../secret.txt
-case validator should reject invalid task_type
+test_normalize_model_adds_openai_prefix
+test_normalize_model_keeps_existing_provider_prefix
+test_update_env_replaces_vllm_model_id
+test_update_env_adds_vllm_model_id_when_missing
+test_platform_status_reports_model_mismatch
+test_benchmark_records_resolved_model_metadata
+test_lanta_exporter_reports_gpu_unavailable_without_nvidia_smi
 ```
 
-### 12.2 Integration tests
+### 13.2 Integration tests
 
 Add integration tests for:
 
-1. Dashboard API starts and returns `/api/healthz`.
-2. Benchmark run can be inserted and listed.
-3. Benchmark run detail returns child results.
-4. Summary endpoint returns expected aggregate values.
-5. Platform exporter returns Prometheus text format.
-6. LiteLLM config file exists and contains `active-lanta-model`.
-7. Docker Compose config validates for OpenWebUI.
-8. Docker Compose config validates for LiteLLM.
-9. Docker Compose config validates for observability.
+1. `GET /api/platform/status` returns valid shape.
+2. `/status` page renders without benchmark data.
+3. `check-platform.ps1` can run with mocked endpoints if practical.
+4. Benchmark runner records model metadata when vLLM endpoint is mocked.
+5. Prometheus config validates.
+6. Grafana dashboard JSON is valid JSON.
+7. Docker Compose config validates for all Compose files.
 
-### 12.3 UI tests
+### 13.3 Manual tests
 
-Minimum manual or automated UI checks:
+Manual model sync test:
 
-1. Open benchmark overview page with no data.
-2. Open benchmark overview page with seeded data.
-3. Open benchmark runs page.
-4. Open benchmark run detail page.
-5. Open benchmark case detail page.
-6. Verify long logs do not break layout.
-7. Verify missing artifacts show a clear error message.
-
-### 12.4 Manual checks
-
-Manual startup check:
-
-```bash
-docker compose -f litellm/docker-compose.yml up -d
-docker compose -f openwebui/docker-compose.yml up -d
-docker compose -f observability/docker-compose.yml up -d
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+powershell -ExecutionPolicy Bypass -File .\scripts\sync-active-model.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
 ```
 
 Manual LiteLLM check:
 
-```bash
-curl http://127.0.0.1:4000/v1/models \
-  -H "Authorization: Bearer $LITELLM_MASTER_KEY"
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+curl.exe http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $env:LITELLM_MASTER_KEY"
 ```
 
-Manual chat completion check:
+Manual chat check:
 
-```bash
-curl http://127.0.0.1:4000/v1/chat/completions \
-  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "active-lanta-model",
-    "messages": [
-      {"role": "user", "content": "Reply exactly: online"}
-    ],
-    "temperature": 0,
-    "max_tokens": 8
-  }'
-```
-
-Manual metrics check:
-
-```bash
-curl http://127.0.0.1:4000/metrics
-curl http://127.0.0.1:9108/metrics
-```
-
-Manual benchmark dry run:
-
-```bash
-python -m benchmark.runners.run_suite --suite smoke --dry-run
-```
-
-Manual benchmark run:
-
-```bash
-python -m benchmark.runners.run_suite \
-  --suite smoke \
-  --model active-lanta-model \
-  --prompt-version rfid_low_power_v1
+```powershell
+curl.exe http://127.0.0.1:4000/v1/chat/completions `
+  -H "Authorization: Bearer $env:LITELLM_MASTER_KEY" `
+  -H "Content-Type: application/json" `
+  -d "{\"model\":\"active-lanta-model\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply exactly: online\"}],\"temperature\":0,\"max_tokens\":8}"
 ```
 
 Manual dashboard check:
 
-```bash
-curl http://127.0.0.1:8088/api/healthz
-curl http://127.0.0.1:8088/api/benchmark/runs
-curl http://127.0.0.1:8088/api/benchmark/summary
+```powershell
+curl.exe http://127.0.0.1:8088/api/healthz
+curl.exe http://127.0.0.1:8088/api/platform/status
 ```
 
-### 12.5 Lint/typecheck
+Manual observability check:
 
-Run applicable checks based on implementation language:
-
-```bash
-python -m compileall benchmark dashboard observability
-python -m pytest
+```powershell
+curl.exe http://127.0.0.1:9108/metrics
+curl.exe http://127.0.0.1:9090/-/ready
+curl.exe http://127.0.0.1:3002/api/health
 ```
 
-If Node files are modified:
+### 13.4 Validation commands
 
-```bash
-cd website
-npm run check
-```
-
-If Docker Compose is installed:
-
-```bash
-docker compose -f litellm/docker-compose.yml config
-docker compose -f openwebui/docker-compose.yml config
-docker compose -f observability/docker-compose.yml config
-```
-
-## 13. Definition of done
-
-The task is complete only when:
-
-* All functional requirements are implemented.
-* Tests pass.
-* Lint/typecheck passes.
-* Existing behavior is not broken.
-* The implementation matches this spec.
-* OpenWebUI can be configured to talk to LiteLLM.
-* LiteLLM can proxy to the existing vLLM endpoint.
-* Prometheus can scrape LiteLLM and the platform exporter.
-* Grafana has at least one provisioned LLM operations dashboard.
-* Benchmark smoke cases exist.
-* Benchmark runner supports dry-run mode.
-* Benchmark runner can call LiteLLM.
-* Benchmark results can be stored.
-* Benchmark dashboard API can list runs, cases, summaries, and artifacts.
-* Documentation explains startup, operations, API keys, monitoring, and benchmarking.
-* Secrets are not committed.
-* Existing `website/`, `sharing/`, `lanta/scripts/`, and `windows/tunnel/` flows remain usable.
-
-## 14. Codex implementation instructions
-
-Implement this spec.
-
-Use the existing repository patterns and do not rewrite unrelated parts of the project.
-
-Do not delete the existing custom `website/` UI. Keep it as a fallback demo UI.
-
-Do not delete the existing `sharing/` gateway. Add documentation saying LiteLLM is now the preferred API gateway, but keep the old gateway for compatibility.
-
-Do not change existing Lanta Slurm behavior unless required for integration. The first version should assume one active model on port `8000`.
-
-Create the spec file at:
-
-```text
-docs/specs/llm-platform-control-plane.md
-```
-
-Then implement the required folders and files:
-
-```text
-openwebui/
-litellm/
-observability/
-benchmark/
-dashboard/
-docs/
-```
-
-Do not introduce new dependencies unless necessary. If a dependency is necessary, document why it is needed.
-
-Prefer simple, maintainable implementation over clever abstractions.
-
-Use environment variables for all secrets and configurable endpoints.
-
-Add `.env.example` files, but never commit real secrets.
-
-Add `.gitignore` entries for generated results, local metrics data, database volumes, logs, and secrets.
-
-Follow these defaults unless the repo already defines alternatives:
-
-```text
-LiteLLM port: 4000
-OpenWebUI port: 3000
-Grafana port: 3002
-Prometheus port: 9090
-Platform exporter port: 9108
-Benchmark dashboard API port: 8088
-vLLM tunnel URL: http://127.0.0.1:8000/v1
-LiteLLM model alias: active-lanta-model
-```
-
-Run relevant checks before finishing:
+Run:
 
 ```bash
 python -m compileall benchmark dashboard observability
@@ -1484,16 +1241,69 @@ python -m pytest
 docker compose -f litellm/docker-compose.yml config
 docker compose -f openwebui/docker-compose.yml config
 docker compose -f observability/docker-compose.yml config
+docker compose -f dashboard/docker-compose.yml config
 ```
 
-If tests cannot be run in the current environment, clearly state which tests could not be run and why.
+If PowerShell scripts are changed, manually run:
 
-At the end, summarize:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\sync-active-model.ps1 -NoRestart
+```
+
+## 14. Definition of done
+
+Phase 2 is complete only when:
+
+1. `scripts/sync-active-model.ps1` exists and can update `VLLM_MODEL_ID` from vLLM `/models`.
+2. `scripts/check-platform.ps1` reports model identity and mismatch warnings.
+3. LiteLLM still exposes `active-lanta-model`.
+4. The real upstream model is visible in a status page/API or Grafana panel.
+5. Dashboard exposes `GET /api/platform/status`.
+6. Dashboard has a readable `/status` page.
+7. Benchmark runs record alias and resolved upstream model.
+8. At least one expanded `rfid_basic` benchmark suite exists.
+9. Grafana clearly labels LiteLLM token metrics vs real GPU metrics.
+10. GPU panels either show real Lanta metrics or clear setup instructions.
+11. Optional Lanta exporter is documented and safe by default.
+12. Docs explain stable alias vs real model.
+13. Docs explain model swap and sync workflow.
+14. Tests are added or updated.
+15. Existing OpenWebUI, LiteLLM, observability, dashboard, benchmark, website, sharing, Lanta scripts, and tunnel flows remain usable.
+16. No real secrets or `.env` files are committed.
+
+## 15. Codex implementation instructions
+
+Implement Phase 2 in small, safe steps.
+
+Priority order:
+
+1. Add `scripts/sync-active-model.ps1`.
+2. Improve `scripts/check-platform.ps1` with model identity checks.
+3. Add dashboard `/api/platform/status` and `/status` page.
+4. Update docs for model swap, sync, and status visibility.
+5. Add benchmark model metadata recording.
+6. Add `rfid_basic` benchmark suite.
+7. Improve Grafana labels and no-data guidance.
+8. Add optional Lanta GPU exporter.
+
+Do not introduce unnecessary complexity.
+
+Do not break the current working stack.
+
+Do not delete existing folders.
+
+Do not commit secrets.
+
+Prefer simple PowerShell and Python scripts that are easy for a Windows-based intern to run.
+
+At the end of implementation, summarize:
 
 1. Files created.
 2. Files modified.
-3. How to start the new stack.
-4. How to verify OpenWebUI to LiteLLM to vLLM.
-5. How to view Grafana.
-6. How to run the smoke benchmark.
-7. Any tradeoffs or incomplete pieces.
+3. How to sync after a Lanta model swap.
+4. How to check platform health.
+5. Where to see the real active model.
+6. Whether GPU metrics are real or still optional.
+7. How to run the expanded benchmark suite.
+8. Tests run and tests not run.
