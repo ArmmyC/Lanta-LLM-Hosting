@@ -88,6 +88,31 @@ $env:LITELLM_MASTER_KEY="sk-your-key"
 powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
 ```
 
+## Keeping the Lanta Job Alive
+
+Option A, recommended: run the foreground Windows watchdog locally. It checks every five minutes by default and resubmits the selected preset only when no pending or running `vllm-model` job exists.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+```
+
+One-shot dry-run test:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+```
+
+Option B, optional: run the Lanta-side foreground polling wrapper only when login-node and cluster policy allow it.
+
+```bash
+cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
+bash scripts/watch-preset.sh --preset qwen36-35b-a3b
+```
+
+The watchdog only confirms that the Slurm job exists; it does not prove vLLM is ready. Model loading may take several minutes after resubmission. The tunnel can usually remain running on port `8000`, and OpenWebUI and LiteLLM normally need no restart while the same endpoint and `active-lanta-model` alias remain in use. Verify the complete stack afterward with `scripts/check-platform.ps1`.
+
+Both watchdogs run in the foreground and stop with `Ctrl+C`. Do not leave GPUs running unattended when cluster policy forbids it. When hosting is finished, stop the watchdog first and then cancel the Slurm job.
+
 The existing `website/` remains as a fallback compatibility/demo UI. Benchmark tooling is optional and does not drive the hosting dashboard.
 
 Component split:

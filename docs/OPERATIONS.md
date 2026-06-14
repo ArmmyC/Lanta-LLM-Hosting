@@ -60,6 +60,52 @@ Check status:
 ssh lanta "squeue -u ub127"
 ```
 
+## Keeping the Lanta Job Alive
+
+### Option A: Windows Watchdog (Recommended)
+
+Run this foreground process from the repository root on the Windows host:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+```
+
+Test the check path once without submitting anything:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+```
+
+The default interval is 300 seconds. Use `-CheckEverySeconds SECONDS` to change it; intervals below 30 seconds are rejected to prevent rapid resubmission loops.
+
+### Option B: Lanta Polling Wrapper (Optional)
+
+Use this foreground wrapper on the Lanta login node only if cluster policy permits lightweight long-running polling:
+
+```bash
+cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
+bash scripts/watch-preset.sh --preset qwen36-35b-a3b
+```
+
+One-shot dry run:
+
+```bash
+bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run
+```
+
+Both watchdogs check only for a pending or running Slurm job named `vllm-model`. They do not cancel jobs and do not prove that vLLM has finished loading. After a resubmission, the model may need several minutes before port `8000` responds.
+
+The existing SSH tunnel can usually stay running because the remote service continues to use port `8000`. OpenWebUI and LiteLLM normally do not need restarting when the same endpoint and stable `active-lanta-model` alias are retained. Verify readiness and the complete local stack with:
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
+The platform check verifies vLLM reachability; it does not report whether either watchdog process is running.
+
+Stop either foreground watchdog with `Ctrl+C`. Avoid indefinite unattended GPU use when cluster policy does not allow it. When hosting is finished, stop the watchdog before running `scancel -n vllm-model` on Lanta.
+
 ## 2. Start Tunnel
 
 ```powershell

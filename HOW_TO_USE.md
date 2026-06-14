@@ -32,6 +32,50 @@ scancel -n vllm-model
 exit
 ```
 
+## Keeping the Lanta Job Alive
+
+### Option A: Windows Watchdog (Recommended)
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+```
+
+```text
+Stop: Ctrl+C
+```
+
+### Option B: Lanta Watchdog (Optional, Policy Permitting)
+
+```bash
+cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
+bash scripts/watch-preset.sh --preset qwen36-35b-a3b
+```
+
+```bash
+bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run
+```
+
+```text
+Stop: Ctrl+C
+Checks job existence only; allow several minutes for vLLM to load after submission.
+Keep the tunnel on port 8000 running. OpenWebUI and LiteLLM normally need no restart.
+Do not leave the watchdog or GPU job running indefinitely when cluster policy forbids it.
+```
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
+```bash
+scancel -n vllm-model
+```
+
 ## Start Hidden Tunnel
 
 ```powershell
