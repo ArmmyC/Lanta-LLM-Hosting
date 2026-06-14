@@ -1,80 +1,63 @@
 # Lanta LLM Hosting Commands
 
-## Start Qwen3.6-27B Job
+Command-first runbook for starting, sharing, checking, and stopping the local hosting stack.
+
+## Start Lanta vLLM Job
 
 ```powershell
-ssh lanta
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
 ```
 
-```bash
-cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-MODEL_REPO=Qwen/Qwen3.6-27B SERVED_MODEL_NAME=qwen36-27b TP=4 MAX_MODEL_LEN=131072 sbatch --time=09:00:00 --export=ALL,MODEL_REPO=Qwen/Qwen3.6-27B,SERVED_MODEL_NAME=qwen36-27b,TP=4,MAX_MODEL_LEN=131072 scripts/serve-model.sbatch
+## Check Lanta Job
+
+```powershell
+ssh lanta "squeue -u ub127"
+ssh lanta "squeue --start -j JOB_ID"
+ssh lanta "scontrol show job JOB_ID"
+ssh lanta "tail -f /project/zz992000-zdevb/zz992005/ub127/SiliconCraft/logs/vllm-model-JOB_ID.out"
+ssh lanta "tail -f /project/zz992000-zdevb/zz992005/ub127/SiliconCraft/logs/vllm-model-JOB_ID.err"
 ```
 
-## Check Job
+## Stop Lanta Job
 
-```bash
-squeue -u ub127
-squeue --start -j JOB_ID
-scontrol show job JOB_ID
-tail -f /project/zz992000-zdevb/zz992005/ub127/SiliconCraft/logs/vllm-model-JOB_ID.out
-tail -f /project/zz992000-zdevb/zz992005/ub127/SiliconCraft/logs/vllm-model-JOB_ID.err
+```powershell
+ssh lanta "scancel JOB_ID"
 ```
 
-## Stop Job
+or cancel all current vLLM jobs:
 
-```bash
-scancel JOB_ID
+```powershell
+ssh lanta "scancel -n vllm-model"
 ```
 
-```bash
-scancel -n vllm-model
-exit
-```
+## Keep the Lanta Job Alive
 
-## Keeping the Lanta Job Alive
-
-### Option A: Windows Watchdog (Recommended)
+### Windows watchdog, recommended
 
 ```powershell
 cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
 powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
 ```
 
+One-shot dry run:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
 ```
 
-```text
-Stop: Ctrl+C
-```
-
-### Option B: Lanta Watchdog (Optional, Policy Permitting)
-
-```bash
-cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-bash scripts/watch-preset.sh --preset qwen36-35b-a3b
-```
-
-```bash
-bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run
-```
-
-```text
-Stop: Ctrl+C
-Checks job existence only; allow several minutes for vLLM to load after submission.
-Keep the tunnel on port 8000 running. OpenWebUI and LiteLLM normally need no restart.
-Do not leave the watchdog or GPU job running indefinitely when cluster policy forbids it.
-```
+### Lanta watchdog, optional
 
 ```powershell
-$env:LITELLM_MASTER_KEY="sk-your-key"
-powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-35b-a3b"
 ```
 
-```bash
-scancel -n vllm-model
+One-shot dry run:
+
+```powershell
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run"
 ```
+
+Stop either foreground watchdog with `Ctrl+C`.
 
 ## Start Hidden Tunnel
 
@@ -96,13 +79,133 @@ Invoke-RestMethod http://127.0.0.1:8000/v1/models
 powershell -ExecutionPolicy Bypass -File .\windows\tunnel\stop-lanta-vllm-tunnel.ps1
 ```
 
-## Test Local API
+## Start LiteLLM
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\windows\tunnel\test-local-vllm-api.ps1
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\litellm
+Copy-Item .env.example .env
+notepad .env
+docker compose up -d
 ```
 
-## Start Legacy Website (Optional)
+## Check LiteLLM
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+curl.exe http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $env:LITELLM_MASTER_KEY"
+```
+
+## Start OpenWebUI
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\openwebui
+Copy-Item .env.example .env
+notepad .env
+docker compose up -d
+Start-Process http://127.0.0.1:3000
+```
+
+## Start Observability
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\observability
+Copy-Item .env.example .env
+notepad .env
+docker compose up -d
+```
+
+Open:
+
+```text
+Grafana:    http://127.0.0.1:3002
+Prometheus: http://127.0.0.1:9090
+Exporter:   http://127.0.0.1:9108/healthz
+```
+
+## Start Admin Dashboard
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\dashboard
+Copy-Item .env.example .env
+notepad .env
+docker compose up -d --build
+Start-Process http://127.0.0.1:8088/status
+```
+
+## Check Full Platform
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+$env:LITELLM_MASTER_KEY="sk-your-key"
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
+## Share OpenWebUI with Tailscale Funnel
+
+Stop any old Funnel route first:
+
+```powershell
+tailscale funnel --https=443 off
+```
+
+Start Funnel to OpenWebUI:
+
+```powershell
+tailscale funnel --bg --https=443 http://127.0.0.1:3000
+tailscale funnel status
+Start-Process https://armmy.tail35169a.ts.net
+```
+
+Expected status:
+
+```text
+https://armmy.tail35169a.ts.net (Funnel on)
+|-- / proxy http://127.0.0.1:3000
+```
+
+Stop public Funnel:
+
+```powershell
+tailscale funnel --https=443 off
+```
+
+## Create LiteLLM User Key
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+curl.exe http://127.0.0.1:4000/key/generate `
+  -H "Authorization: Bearer $env:LITELLM_MASTER_KEY" `
+  -H "Content-Type: application/json" `
+  -d "{\"models\":[\"active-lanta-model\"],\"max_budget\":10,\"metadata\":{\"user\":\"friend-name\"}}"
+```
+
+User settings:
+
+```text
+Base URL: http://<host>:4000/v1
+Model: active-lanta-model
+API key: sk-user-key
+```
+
+## Stop Local Stack
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\dashboard
+docker compose down
+
+cd ..\observability
+docker compose down
+
+cd ..\openwebui
+docker compose down
+
+cd ..\litellm
+docker compose down
+```
+
+## Legacy Website, Optional
+
+The old `website/` and `sharing/` flows remain for compatibility. New users should use OpenWebUI for chat and LiteLLM virtual keys for API access.
 
 ```powershell
 cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\website
@@ -115,84 +218,4 @@ npm run dev
 
 ```powershell
 Start-Process http://127.0.0.1:5177
-```
-
-## Check Website
-
-```powershell
-Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5177
-```
-
-## Stop Website
-
-```powershell
-Get-NetTCPConnection -LocalPort 5177 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
-```
-
-## Start Public Website Funnel
-
-```powershell
-tailscale funnel --bg --https=443 http://127.0.0.1:5177
-```
-
-## Check Public Funnel
-
-```powershell
-tailscale funnel status
-Start-Process https://armmy.tail35169a.ts.net
-```
-
-## Stop Public Funnel
-
-```powershell
-tailscale funnel --https=443 off
-```
-
-## Start Authenticated Public API Funnel
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-powershell -ExecutionPolicy Bypass -File .\sharing\start-tailscale-funnel-share.ps1 -ApiTokens "YOUR_API_TOKEN"
-```
-
-## Stop Authenticated Public API Funnel
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\sharing\stop-tailscale-funnel-share.ps1
-```
-# Preferred Private Platform Startup
-
-```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-powershell -ExecutionPolicy Bypass -File .\windows\tunnel\start-lanta-vllm-tunnel.ps1
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\litellm
-docker compose up -d
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\openwebui
-docker compose up -d
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\observability
-docker compose up -d
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\dashboard
-docker compose up -d --build
-```
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-$env:LITELLM_MASTER_KEY="sk-your-key"
-powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
 ```
