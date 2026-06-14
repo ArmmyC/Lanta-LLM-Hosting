@@ -116,3 +116,33 @@ powershell -ExecutionPolicy Bypass -File .\sharing\start-tailscale-funnel-share.
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\sharing\stop-tailscale-funnel-share.ps1
 ```
+# Preferred Platform Startup
+
+```powershell
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+```
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+powershell -ExecutionPolicy Bypass -File .\windows\tunnel\start-lanta-vllm-tunnel.ps1
+```
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\litellm
+docker compose up -d
+```
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\openwebui
+docker compose up -d
+```
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\observability
+docker compose up -d
+```
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+python -m benchmark.runners.run_suite --suite smoke --dry-run
+```

@@ -1,0 +1,295 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
+      "title": "Inference",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "No metrics yet. Generate a request through OpenWebUI or LiteLLM.",
+      "fieldConfig": { "defaults": { "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "lanta_vllm_active_model", "legendFormat": "{{model}}", "refId": "A" }],
+      "title": "Current Active Model",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "LiteLLM request rate. No metrics yet. Generate a request through OpenWebUI or LiteLLM.",
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [{ "expr": "sum(rate(litellm_proxy_total_requests_metric[5m]))", "legendFormat": "requests/s", "refId": "A" }],
+      "title": "LiteLLM Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Concurrent in-flight requests when LiteLLM exposes the metric.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(litellm_proxy_in_flight_requests)", "legendFormat": "in-flight", "refId": "A" }],
+      "title": "Concurrent In-Flight Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Total LiteLLM requests.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 5,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(litellm_proxy_total_requests_metric)", "legendFormat": "total", "refId": "A" }],
+      "title": "Total Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 },
+      "id": 6,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(rate(litellm_proxy_failed_requests_metric[5m])) / clamp_min(sum(rate(litellm_proxy_total_requests_metric[5m])), 1)", "legendFormat": "error rate", "refId": "A" }],
+      "title": "Error Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [{ "expr": "histogram_quantile(0.50, sum(rate(litellm_request_latency_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p50", "refId": "A" }],
+      "title": "p50 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(litellm_request_latency_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "p95", "refId": "A" }],
+      "title": "p95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "tok/s" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 },
+      "id": 9,
+      "targets": [{ "expr": "sum(rate(litellm_output_tokens_metric[1m]))", "legendFormat": "output token/s", "refId": "A" }],
+      "title": "Output Token/s",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 10,
+      "panels": [],
+      "title": "Usage",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "tpm" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 10 },
+      "id": 11,
+      "targets": [{ "expr": "sum(rate(litellm_input_tokens_metric[1m])) * 60", "legendFormat": "input tokens/min", "refId": "A" }],
+      "title": "Input Tokens/min",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "tpm" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 10 },
+      "id": 12,
+      "targets": [{ "expr": "sum(rate(litellm_output_tokens_metric[1m])) * 60", "legendFormat": "output tokens/min", "refId": "A" }],
+      "title": "Output Tokens/min",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 10 },
+      "id": 13,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(litellm_input_tokens_metric + litellm_output_tokens_metric)", "legendFormat": "tokens", "refId": "A" }],
+      "title": "Total Tokens",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 10 },
+      "id": 14,
+      "targets": [{ "expr": "sum by (api_key) (litellm_input_tokens_metric + litellm_output_tokens_metric)", "legendFormat": "{{api_key}}", "refId": "A" }],
+      "title": "Usage by API Key/User",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 10 },
+      "id": 15,
+      "targets": [{ "expr": "sum by (model) (litellm_input_tokens_metric + litellm_output_tokens_metric)", "legendFormat": "{{model}}", "refId": "A" }],
+      "title": "Usage by Model Alias",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 16,
+      "panels": [],
+      "title": "System",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 16 },
+      "id": 17,
+      "targets": [{ "expr": "time() - process_start_time_seconds{job=\"litellm\"}", "legendFormat": "uptime", "refId": "A" }],
+      "title": "LiteLLM Uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 16 },
+      "id": 18,
+      "targets": [{ "expr": "lanta_vllm_reachable", "legendFormat": "{{active_model}}", "refId": "A" }],
+      "title": "vLLM Upstream Health",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 16 },
+      "id": 19,
+      "targets": [{ "expr": "lanta_ssh_tunnel_healthy", "legendFormat": "{{target}}", "refId": "A" }],
+      "title": "SSH Tunnel Health",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 16 },
+      "id": 20,
+      "targets": [{ "expr": "lanta_local_ram_used_bytes", "legendFormat": "used", "refId": "A" }],
+      "title": "RAM Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 16 },
+      "id": 21,
+      "targets": [{ "expr": "lanta_local_cpu_percent", "legendFormat": "cpu", "refId": "A" }],
+      "title": "CPU Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 16 },
+      "id": 22,
+      "targets": [{ "expr": "lanta_local_disk_used_bytes", "legendFormat": "disk", "refId": "A" }],
+      "title": "Disk Usage",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "id": 23,
+      "panels": [],
+      "title": "Lanta/Slurm",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 21 },
+      "id": 24,
+      "targets": [{ "expr": "lanta_slurm_vllm_job_running", "legendFormat": "{{state}} {{node}}", "refId": "A" }],
+      "title": "Slurm Job State",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 21 },
+      "id": 25,
+      "targets": [{ "expr": "lanta_slurm_active_vllm_job_id", "legendFormat": "{{state}}", "refId": "A" }],
+      "title": "Active vLLM Job ID",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "dateTimeAsIso" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 21 },
+      "id": 26,
+      "targets": [{ "expr": "lanta_last_successful_health_check_timestamp * 1000", "legendFormat": "{{component}}", "refId": "A" }],
+      "title": "Last Successful Health Check",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "GPU utilization is shown when a GPU exporter is added to Prometheus.",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 21 },
+      "id": 27,
+      "targets": [{ "expr": "DCGM_FI_DEV_GPU_UTIL", "legendFormat": "gpu {{gpu}}", "refId": "A" }],
+      "title": "GPU Utilization",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "GPU memory is shown when a GPU exporter is added to Prometheus.",
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 21 },
+      "id": 28,
+      "targets": [{ "expr": "DCGM_FI_DEV_FB_USED", "legendFormat": "gpu {{gpu}}", "refId": "A" }],
+      "title": "GPU Memory Usage",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "id": 29,
+      "panels": [],
+      "title": "Benchmark",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "Benchmark API metrics can be added after the dashboard backend is instrumented.",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 26 },
+      "id": 30,
+      "options": { "content": "Benchmark results are available from the dashboard API at http://127.0.0.1:8088. No metrics yet. Generate a request through OpenWebUI or LiteLLM.", "mode": "markdown" },
+      "title": "Benchmark Dashboard Link",
+      "type": "text"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["lanta", "llm", "vllm", "litellm"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Lanta LLM Operations",
+  "uid": "lanta-llm-operations",
+  "version": 1,
+  "weekStart": ""
+}

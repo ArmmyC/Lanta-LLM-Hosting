@@ -1,0 +1,24 @@
+model_list:
+  - model_name: active-lanta-model
+    litellm_params:
+      model: openai/active-lanta-model
+      api_base: os.environ/VLLM_BASE_URL
+      api_key: os.environ/VLLM_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL
+  store_model_in_db: true
+  allow_user_auth: true
+
+litellm_settings:
+  callbacks: ["prometheus"]
+  success_callback: ["prometheus"]
+  failure_callback: ["prometheus"]
+  set_verbose: false
+  drop_params: true
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 1
+  timeout: 300

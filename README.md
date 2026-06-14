@@ -10,6 +10,11 @@ lanta-llm-hosting/
   cli/                  OpenAI-compatible command-line chat client.
   windows/tunnel/       Hidden SSH tunnel watchdog and local API tests.
   sharing/              Authenticated API gateway and Tailscale Funnel tools.
+  litellm/              Preferred OpenAI-compatible gateway, keys, usage, metrics.
+  openwebui/            Primary browser chat UI backed by LiteLLM.
+  observability/        Prometheus, Grafana, and platform exporter.
+  benchmark/            HDL benchmark cases, runner, schemas, and artifacts.
+  dashboard/            Benchmark dashboard API and minimal HTML pages.
   lanta/scripts/        Generic model download, serve, submit, and test scripts.
   lanta/legacy-qwen36/  Older Qwen3.6-specific scripts kept for reference.
   docs/                 Setup, model swapping, UI, and friend usage guides.
@@ -39,6 +44,31 @@ npm run dev
 Open `http://127.0.0.1:5177`.
 
 See [HOW_TO_USE.md](HOW_TO_USE.md) for the complete operational command list and [HOW_TO_SWAP.md](HOW_TO_SWAP.md) for model swapping.
+
+## Platform Stack
+
+The production-oriented path is now:
+
+```text
+OpenWebUI -> LiteLLM -> local SSH tunnel -> vLLM on Lanta
+```
+
+Start order:
+
+1. Start Lanta vLLM job.
+2. Start tunnel.
+3. Start LiteLLM.
+4. Start OpenWebUI.
+5. Start observability stack.
+6. Run benchmark suite.
+
+Key docs:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Operations](docs/OPERATIONS.md)
+- [Benchmarking](docs/BENCHMARKING.md)
+
+The existing `website/` remains as a fallback demo UI.
 
 ## Lanta Deployment
 

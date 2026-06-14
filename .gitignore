@@ -38,6 +38,25 @@ logs/
 tmp/
 temp/
 
+# LLM platform local state
+benchmark/artifacts/*
+!benchmark/artifacts/.gitkeep
+benchmark/results/
+benchmark/.local/
+dashboard/.local/
+*.sqlite
+*.sqlite3
+postgres-data/
+prometheus-data/
+grafana-data/
+observability/prometheus/data/
+observability/grafana/data/
+litellm/data/
+openwebui/data/
+secrets/
+*.secret
+*_SECRET
+
 # Local editor, OS, and Codex artifacts
 .codex-remote-attachments/
 .codex/

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check api/chat.js"
+    "check": "node --check server.mjs && node --check api/chat.js && node --check api/models.js && node --check public/app.js"
   },
   "engines": {
     "node": ">=20"

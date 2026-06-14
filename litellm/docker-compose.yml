@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-litellm_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+    volumes:
+      - litellm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-litellm} -d ${POSTGRES_DB:-litellm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-change-this-master-key}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-change-this-salt-key}
+      LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL:-postgresql://litellm:litellm_dev_password@postgres:5432/litellm}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      VLLM_API_KEY: ${VLLM_API_KEY:-EMPTY}
+      STORE_MODEL_IN_DB: "True"
+      LITELLM_LOG: INFO
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+
+volumes:
+  litellm-postgres-data:
+
+networks:
+  default:
+    name: lanta-llm-platform

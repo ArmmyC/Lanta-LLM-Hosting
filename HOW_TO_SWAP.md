@@ -111,3 +111,16 @@ MAX_MODEL_LEN=65536 bash scripts/submit-preset.sh qwen3-coder-30b-a3b
 ```
 
 Keep the same `SERVED_MODEL_NAME` if you want the website to keep auto-detecting the active model through `/api/models`.
+## LiteLLM/OpenWebUI Note
+
+Keep using the same vLLM endpoint when swapping models. LiteLLM should expose the stable user-facing alias:
+
+```text
+active-lanta-model
+```
+
+After a swap, restart the tunnel if health checks stay offline, then OpenWebUI and API clients can keep calling LiteLLM at:
+
+```text
+http://127.0.0.1:4000/v1
+```

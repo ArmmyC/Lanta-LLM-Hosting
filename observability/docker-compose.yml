@@ -1,0 +1,50 @@
+services:
+  platform-exporter:
+    build:
+      context: ./exporters
+    restart: unless-stopped
+    ports:
+      - "${PLATFORM_EXPORTER_PORT:-9108}:9108"
+    environment:
+      PLATFORM_EXPORTER_PORT: "9108"
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      SLURM_JOB_NAME: ${SLURM_JOB_NAME:-vllm-model}
+      SLURM_USER: ${SLURM_USER:-}
+      HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    depends_on:
+      - platform-exporter
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-this-grafana-password}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: lanta-llm-platform

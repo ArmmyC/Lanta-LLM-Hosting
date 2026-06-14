@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BenchmarkCase",
+  "type": "object",
+  "required": ["id", "title", "task_type", "prompt"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{2,80}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "task_type": { "enum": ["rtl_generation", "testbench_generation", "rtl_debugging", "low_power_rewrite"] },
+    "description": { "type": ["string", "null"] },
+    "prompt": { "type": "string", "minLength": 1 },
+    "expected_language": { "type": "string", "default": "systemverilog" },
+    "expected_module_name": { "type": ["string", "null"] },
+    "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 600, "default": 120 },
+    "evaluator_config": { "type": "object", "default": {} }
+  },
+  "additionalProperties": false
+}
