@@ -30,6 +30,7 @@ The runner:
 - extracts code blocks
 - classifies missing code and static failures
 - optionally runs local compile checks when `iverilog` is available
+- optionally checks simulation output text when configured
 - records latency and token usage when upstream returns usage
 - writes local JSON fallback results
 
@@ -56,6 +57,22 @@ Case validation:
 - `task_type` must be `rtl_generation`, `testbench_generation`, `rtl_debugging`, or `low_power_rewrite`
 - RTL generation cases require `expected_module_name`
 - `timeout_seconds` must be 1 to 600
+
+Optional evaluator config:
+
+```yaml
+evaluator_config:
+  required_terms:
+    - always_ff
+  auxiliary_files:
+    - benchmark/fixtures/lp_counter.sv
+  expected_pass_text: PASS
+  forbidden_fail_text: FAIL
+```
+
+`required_terms` failures are reported as `missing_required_term`. Older stored results may still contain `missing_port`.
+
+When compile and simulation run successfully, `expected_pass_text` must appear in the simulation log and `forbidden_fail_text` must not appear. Violations are reported as `simulation_mismatch`.
 
 ## Storage
 

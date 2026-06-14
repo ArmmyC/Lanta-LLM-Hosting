@@ -12,10 +12,9 @@ def classify_static_failure(code: str, expected_module_name: str | None, require
             return "failed", "wrong_module_name"
     for term in required_terms or []:
         if term not in code:
-            return "failed", "missing_port"
+            return "failed", "missing_required_term"
     return "passed", "none"
 
 
 def numeric_score(status: str) -> float:
     return 1.0 if status == "passed" else 0.0
-

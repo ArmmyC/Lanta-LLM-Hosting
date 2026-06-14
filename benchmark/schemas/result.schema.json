@@ -9,7 +9,7 @@
     "model_alias": { "type": "string", "minLength": 1 },
     "prompt_version": { "type": "string" },
     "status": { "enum": ["passed", "failed", "error", "skipped"] },
-    "failure_category": { "enum": [null, "none", "no_code_block", "wrong_module_name", "missing_port", "syntax_error", "compile_error", "simulation_mismatch", "timeout", "upstream_error", "invalid_case", "unknown"] }
+    "failure_category": { "enum": [null, "none", "no_code_block", "wrong_module_name", "missing_port", "missing_required_term", "syntax_error", "compile_error", "simulation_mismatch", "timeout", "upstream_error", "invalid_case", "unknown"] }
   },
   "additionalProperties": true
 }

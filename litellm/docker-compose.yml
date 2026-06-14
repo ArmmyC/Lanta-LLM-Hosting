@@ -28,6 +28,7 @@ services:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL:-postgresql://litellm:litellm_dev_password@postgres:5432/litellm}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
       VLLM_API_KEY: ${VLLM_API_KEY:-EMPTY}
+      VLLM_MODEL_ID: ${VLLM_MODEL_ID:-openai/qwen36-27b}
       STORE_MODEL_IN_DB: "True"
       LITELLM_LOG: INFO
     command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]

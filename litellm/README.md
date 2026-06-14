@@ -17,6 +17,33 @@ Required values in `.env`:
 - `LITELLM_SALT_KEY`
 - `POSTGRES_PASSWORD`
 - `VLLM_BASE_URL`, normally `http://host.docker.internal:8000/v1` on Docker Desktop for Windows
+- `VLLM_MODEL_ID`, the LiteLLM provider-prefixed model ID for the current vLLM served model
+
+## Model Routing
+
+Callers should always use the stable public alias:
+
+```text
+active-lanta-model
+```
+
+Change the upstream vLLM model by editing `.env`:
+
+```env
+VLLM_MODEL_ID=openai/qwen36-27b
+```
+
+The value must include LiteLLM's provider prefix, usually `openai/`, and the suffix must match the model name returned by:
+
+```powershell
+curl.exe http://127.0.0.1:8000/v1/models
+```
+
+After changing `.env`, recreate the LiteLLM container so Docker picks up the new environment:
+
+```powershell
+docker compose up -d --force-recreate litellm
+```
 
 ## Verify
 

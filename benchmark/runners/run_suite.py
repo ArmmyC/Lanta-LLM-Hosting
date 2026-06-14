@@ -144,6 +144,17 @@ def auxiliary_paths(case: dict[str, Any]) -> list[Path]:
     return paths
 
 
+def simulation_output_matches(case: dict[str, Any], simulation_log: str) -> tuple[bool, str | None]:
+    config = case.get("evaluator_config", {})
+    expected_pass_text = config.get("expected_pass_text")
+    forbidden_fail_text = config.get("forbidden_fail_text")
+    if expected_pass_text and str(expected_pass_text) not in simulation_log:
+        return False, f"expected simulation output text not found: {expected_pass_text}"
+    if forbidden_fail_text and str(forbidden_fail_text) in simulation_log:
+        return False, f"forbidden simulation output text found: {forbidden_fail_text}"
+    return True, None
+
+
 def run_case(case: dict[str, Any], run: BenchmarkRun, system_prompt: str, args: argparse.Namespace) -> BenchmarkResult:
     result = BenchmarkResult(run_id=run.id, case_id=case["id"], model_alias=args.model, prompt_version=args.prompt_version)
     messages = build_prompt(system_prompt, case)
@@ -201,7 +212,16 @@ def run_case(case: dict[str, Any], run: BenchmarkRun, system_prompt: str, args: 
                     result.status = "failed"
                     result.failure_category = "timeout"
                     result.score = numeric_score(result.status)
-                elif simulation_status in {"passed", "tool_missing", "not_run"} and result.status == "passed":
+                elif simulation_status == "passed":
+                    output_ok, output_failure = simulation_output_matches(case, simulation_log)
+                    if not output_ok:
+                        result.status = "failed"
+                        result.failure_category = "simulation_mismatch"
+                        result.failure_message = output_failure
+                        result.score = numeric_score(result.status)
+                    elif result.status == "passed":
+                        result.failure_category = "none"
+                elif simulation_status in {"tool_missing", "not_run"} and result.status == "passed":
                     result.failure_category = "none"
             else:
                 result.simulation_status = "not_run"

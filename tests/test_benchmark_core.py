@@ -8,7 +8,7 @@ import pytest
 
 from benchmark.evaluators.extract_code import extract_code_block
 from benchmark.runners import run_suite
-from benchmark.runners.run_suite import build_chat_payload, load_case, parse_usage, validate_case
+from benchmark.runners.run_suite import build_chat_payload, load_case, parse_usage, simulation_output_matches, validate_case
 from benchmark.evaluators.score import classify_static_failure
 from benchmark.storage.models import BenchmarkRun
 
@@ -55,6 +55,12 @@ def test_static_failure_wrong_module_name() -> None:
     status, failure = classify_static_failure("module other; endmodule", "lp_counter")
     assert status == "failed"
     assert failure == "wrong_module_name"
+
+
+def test_static_failure_missing_required_term() -> None:
+    status, failure = classify_static_failure("module lp_counter; endmodule", "lp_counter", ["always_ff"])
+    assert status == "failed"
+    assert failure == "missing_required_term"
 
 
 def test_load_smoke_case() -> None:
@@ -105,7 +111,7 @@ def test_simulation_runs_after_compile_pass(monkeypatch: pytest.MonkeyPatch) -> 
 
     def fake_simulate(compiled_path: Path, timeout_seconds: int):
         called["simulate"] = True
-        return "passed", "ok"
+        return "passed", "PASS"
 
     monkeypatch.setattr(run_suite, "compile_systemverilog", fake_compile)
     monkeypatch.setattr(run_suite, "simulate_vvp", fake_simulate)
@@ -114,3 +120,24 @@ def test_simulation_runs_after_compile_pass(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.simulation_status == "passed"
     assert called["simulate"]
     assert called["auxiliary_count"] == 1
+
+
+def test_simulation_output_requires_expected_text() -> None:
+    case = {"evaluator_config": {"expected_pass_text": "PASS"}}
+    ok, failure = simulation_output_matches(case, "all good")
+    assert not ok
+    assert "PASS" in str(failure)
+
+
+def test_simulation_output_rejects_forbidden_text() -> None:
+    case = {"evaluator_config": {"forbidden_fail_text": "FAIL"}}
+    ok, failure = simulation_output_matches(case, "FAIL at cycle 3")
+    assert not ok
+    assert "FAIL" in str(failure)
+
+
+def test_simulation_output_accepts_matching_log() -> None:
+    case = {"evaluator_config": {"expected_pass_text": "PASS", "forbidden_fail_text": "FAIL"}}
+    ok, failure = simulation_output_matches(case, "PASS")
+    assert ok
+    assert failure is None

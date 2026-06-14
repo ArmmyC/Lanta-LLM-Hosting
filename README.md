@@ -68,6 +68,13 @@ Key docs:
 - [Operations](docs/OPERATIONS.md)
 - [Benchmarking](docs/BENCHMARKING.md)
 
+Local stack check:
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
 The existing `website/` remains as a fallback demo UI.
 
 ## Lanta Deployment

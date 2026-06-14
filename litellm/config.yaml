@@ -1,7 +1,11 @@
 model_list:
   - model_name: active-lanta-model
     litellm_params:
-      model: openai/qwen36-27b
+      # Public callers keep using "active-lanta-model".
+      # Change VLLM_MODEL_ID in litellm/.env when the vLLM served model changes.
+      # The value must include LiteLLM's provider prefix, for example:
+      #   VLLM_MODEL_ID=openai/qwen36-27b
+      model: os.environ/VLLM_MODEL_ID
       api_base: os.environ/VLLM_BASE_URL
       api_key: os.environ/VLLM_API_KEY
 

@@ -9,6 +9,39 @@
 5. Start observability stack.
 6. Run benchmark suite.
 
+## First Local Run
+
+Create local environment files before starting the stack:
+
+```powershell
+cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
+Copy-Item litellm\.env.example litellm\.env
+Copy-Item openwebui\.env.example openwebui\.env
+Copy-Item observability\.env.example observability\.env
+Copy-Item dashboard\.env.example dashboard\.env
+```
+
+Edit those `.env` files and change local secrets before use:
+
+- LiteLLM: `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY`, `POSTGRES_PASSWORD`, and `LITELLM_DATABASE_URL`
+- LiteLLM routing: `VLLM_MODEL_ID`, for example `openai/qwen36-27b`
+- OpenWebUI: the web UI secret/session settings
+- Observability: `GRAFANA_ADMIN_PASSWORD`
+
+OpenWebUI asks you to create the first admin account on first launch. That is normal. The OpenWebUI account is separate from LiteLLM API keys; OpenWebUI login controls the web UI, while LiteLLM keys control access to the model gateway.
+
+Set your local shell key for verification commands:
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+```
+
+Run the local platform check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
+```
+
 ## 1. Start Lanta vLLM
 
 ```powershell
@@ -48,6 +81,24 @@ Verify:
 
 ```powershell
 curl.exe http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $env:LITELLM_MASTER_KEY"
+```
+
+Callers should use the stable public model alias:
+
+```text
+active-lanta-model
+```
+
+The upstream vLLM served model is controlled by `VLLM_MODEL_ID` in `litellm/.env`. The value must include LiteLLM's provider prefix and match the model returned by the vLLM tunnel, for example:
+
+```env
+VLLM_MODEL_ID=openai/qwen36-27b
+```
+
+After changing `.env`, recreate the container:
+
+```powershell
+docker compose up -d --force-recreate litellm
 ```
 
 ## 4. Start OpenWebUI
@@ -121,7 +172,69 @@ curl.exe http://127.0.0.1:4000/key/delete `
 
 “API generation” means creating and managing LiteLLM virtual keys.
 
+## Troubleshooting
+
+### `curl: (52) Empty reply from server`
+
+This usually means the container accepted a connection while LiteLLM was still starting, migrating its database, or restarting. Check:
+
+```powershell
+docker compose ps
+docker compose logs --tail=150 litellm
+```
+
+Wait 30-60 seconds after recreating LiteLLM before testing.
+
+### Wrong LiteLLM key
+
+If `/v1/models` returns 401, verify the key in your shell matches the key inside the running container:
+
+```powershell
+$env:LITELLM_MASTER_KEY="sk-your-key"
+docker compose exec litellm printenv
+```
+
+Do not paste secrets into issues or commits.
+
+### `.env` changed but Docker still uses old values
+
+Docker does not change environment variables inside an existing container after a plain restart. Recreate the service:
+
+```powershell
+docker compose up -d --force-recreate litellm
+```
+
+### Postgres password mismatch after changing `.env`
+
+The Postgres Docker volume keeps the password from first initialization. If you change `POSTGRES_PASSWORD` later, LiteLLM may fail database auth. For a local reset only when safe, remove the local volume:
+
+```powershell
+docker compose down -v
+docker compose up -d
+```
+
+This deletes the local LiteLLM database volume. Do not use it if you need to keep stored keys or usage history.
+
+### Wrong upstream model name
+
+If LiteLLM returns a model-not-found error from upstream, compare:
+
+```powershell
+curl.exe http://127.0.0.1:8000/v1/models
+```
+
+with `VLLM_MODEL_ID` in `litellm/.env`. If vLLM serves `qwen36-27b`, set:
+
+```env
+VLLM_MODEL_ID=openai/qwen36-27b
+```
+
+Then recreate LiteLLM:
+
+```powershell
+docker compose up -d --force-recreate litellm
+```
+
 ## Compatibility Gateways
 
 The existing `website/` and `sharing/` flows remain available for demos and compatibility. LiteLLM is now the preferred gateway for new users, scripts, and benchmark runs.
-
