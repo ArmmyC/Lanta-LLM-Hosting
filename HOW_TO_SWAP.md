@@ -8,6 +8,8 @@ http://127.0.0.1:8000/v1
 
 The swap helper cancels the previous `vllm-model` Slurm job and submits a new one on port `8000`.
 
+For daily RTL/SystemVerilog work, start with `qwen36-27b`. It is the quality reference from the registered RLT-Benchmark Baseline v0.1 functional results. See `docs/default-rtl-model.md` for the decision and tradeoffs.
+
 ## Available Presets
 
 ```text
@@ -16,6 +18,20 @@ qwen36-35b-a3b
 qwen3-coder-30b-a3b
 qwen25-coder-32b
 deepseek-coder-v2-lite
+```
+
+## Swap To Qwen3.6 27B (Default Recommended)
+
+```powershell
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
+```
+
+## Swap To Qwen3.6 35B-A3B
+
+Use this as the secondary practical candidate when GPU memory, throughput, or context stability is the priority.
+
+```powershell
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
 ```
 
 ## Check Current Job
@@ -40,18 +56,6 @@ ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash script
 
 ```powershell
 ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh deepseek-coder-v2-lite"
-```
-
-## Swap Back To Qwen3.6 27B
-
-```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
-```
-
-## Swap To Qwen3.6 35B-A3B
-
-```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
 ```
 
 ## Watch Queue
@@ -100,6 +104,7 @@ Click `Check connection` after a swap. The website asks vLLM for `/v1/models` an
 
 - Only one model is served on port `8000` at a time.
 - Swapping cancels the previous `vllm-model` job.
+- `qwen36-27b` is the default general RTL model; `deepseek-coder-v2-lite` is retained for RTL-OPT equivalence comparison rather than as the general default.
 - Existing browser chat history remains visible, but very old messages may not be sent as model context.
 - `DeepSeek-Coder-V2-Lite-Instruct` uses a shorter default context length: `32768`.
 ## Context Defaults

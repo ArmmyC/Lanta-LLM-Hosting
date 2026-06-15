@@ -2,6 +2,15 @@
 
 The generic scripts in `lanta/scripts/` let you download and serve another Hugging Face model without editing files.
 
+For normal RTL/SystemVerilog work, use the preset helper with the recommended default:
+
+```bash
+cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
+bash scripts/submit-preset.sh qwen36-27b
+```
+
+The other supported presets remain available: `qwen36-35b-a3b`, `qwen3-coder-30b-a3b`, `qwen25-coder-32b`, and `deepseek-coder-v2-lite`. Only one model is served at a time, while the endpoint remains on port `8000`.
+
 Remote project root:
 
 ```bash
@@ -14,7 +23,7 @@ Example:
 
 ```bash
 cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-MODEL_REPO=Qwen/Qwen3.6-35B-A3B bash scripts/download-model.sh
+MODEL_REPO=Qwen/Qwen3.6-27B bash scripts/download-model.sh
 ```
 
 Another model:
@@ -32,8 +41,8 @@ MODEL_REPO=org/model-name MODEL_NAME=my-test-model bash scripts/download-model.s
 ## 2. Serve The Model
 
 ```bash
-MODEL_REPO=Qwen/Qwen3.6-35B-A3B \
-SERVED_MODEL_NAME=qwen36 \
+MODEL_REPO=Qwen/Qwen3.6-27B \
+SERVED_MODEL_NAME=qwen36-27b \
 TP=4 \
 MAX_MODEL_LEN=131072 \
 REASONING_PARSER=qwen3 \
@@ -55,8 +64,8 @@ Only one model is served by a vLLM job at a time. To swap models, cancel the run
 ## 3. Test The Running Model
 
 ```bash
-MODEL_REPO=Qwen/Qwen3.6-35B-A3B \
-SERVED_MODEL_NAME=qwen36 \
+MODEL_REPO=Qwen/Qwen3.6-27B \
+SERVED_MODEL_NAME=qwen36-27b \
 bash scripts/test-model-api.sh
 ```
 
@@ -65,7 +74,7 @@ bash scripts/test-model-api.sh
 Set the model name your vLLM job serves:
 
 ```powershell
-$env:MODEL="qwen36"
+$env:MODEL="qwen36-27b"
 .\cli\qwen-chat.ps1 "Hello"
 ```
 

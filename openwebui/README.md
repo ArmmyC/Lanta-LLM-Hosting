@@ -42,6 +42,8 @@ Default model:
 active-lanta-model
 ```
 
+The alias is backed by `qwen36-27b` in the recommended daily RTL setup. Keep using the alias in OpenWebUI so administrators can swap the one active backend model without changing user configuration.
+
 If OpenWebUI keeps old provider settings after `.env` changes, update the provider in the OpenWebUI admin settings. Do not delete the OpenWebUI Docker volume unless you are okay losing accounts, chats, and saved settings.
 
 OpenWebUI stores chats and users. LiteLLM and Prometheus are the source of truth for usage metrics, API keys, budgets, and request telemetry.

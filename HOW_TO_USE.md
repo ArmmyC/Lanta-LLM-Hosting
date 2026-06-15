@@ -4,8 +4,10 @@ Command-first runbook for starting, sharing, checking, and stopping the local ho
 
 ## Start Lanta vLLM Job
 
+`qwen36-27b` is the recommended daily default for RTL/SystemVerilog work. Only one model is served at a time, and model swaps keep the local endpoint at `http://127.0.0.1:8000/v1`.
+
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
 ```
 
 ## Check Lanta Job
@@ -36,25 +38,25 @@ ssh lanta "scancel -n vllm-model"
 
 ```powershell
 cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b
 ```
 
 One-shot dry run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b -Once -DryRun
 ```
 
 ### Lanta watchdog, optional
 
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-35b-a3b"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-27b"
 ```
 
 One-shot dry run:
 
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/watch-preset.sh --preset qwen36-27b --once --dry-run"
 ```
 
 Stop either foreground watchdog with `Ctrl+C`.
@@ -72,6 +74,14 @@ powershell -ExecutionPolicy Bypass -File .\windows\tunnel\start-lanta-vllm-tunne
 powershell -ExecutionPolicy Bypass -File .\windows\tunnel\status-lanta-vllm-tunnel.ps1
 Invoke-RestMethod http://127.0.0.1:8000/v1/models
 ```
+
+## Daily RTL Checklist
+
+1. Start or swap to `qwen36-27b` with the command above.
+2. Restart/check the tunnel if the endpoint is offline.
+3. Confirm `http://127.0.0.1:8000/v1/models` reports `qwen36-27b`.
+4. Run the tiny RTL smoke request in `docs/default-rtl-model.md`.
+5. Continue through OpenWebUI, the website, or the API. LiteLLM/OpenWebUI callers should keep using `active-lanta-model`.
 
 ## Stop Tunnel
 

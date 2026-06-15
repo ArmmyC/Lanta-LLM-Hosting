@@ -51,7 +51,7 @@ docs/KEY_MANAGEMENT.md
 ## 1. Start Lanta vLLM
 
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
 ```
 
 Check status:
@@ -67,13 +67,13 @@ ssh lanta "squeue -u ub127"
 Run this foreground process from the repository root on the Windows host:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b
 ```
 
 Test the check path once without submitting anything:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b -Once -DryRun
 ```
 
 The default interval is 300 seconds. Use `-CheckEverySeconds SECONDS` to change it; intervals below 30 seconds are rejected to prevent rapid resubmission loops.
@@ -84,13 +84,13 @@ Use this foreground wrapper on the Lanta login node only if cluster policy permi
 
 ```bash
 cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-bash scripts/watch-preset.sh --preset qwen36-35b-a3b
+bash scripts/watch-preset.sh --preset qwen36-27b
 ```
 
 One-shot dry run:
 
 ```bash
-bash scripts/watch-preset.sh --preset qwen36-35b-a3b --once --dry-run
+bash scripts/watch-preset.sh --preset qwen36-27b --once --dry-run
 ```
 
 Both watchdogs check only for a pending or running Slurm job named `vllm-model`. They do not cancel jobs and do not prove that vLLM has finished loading. After a resubmission, the model may need several minutes before port `8000` responds.

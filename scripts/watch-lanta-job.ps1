@@ -7,7 +7,7 @@ param(
         "qwen25-coder-32b",
         "deepseek-coder-v2-lite"
     )]
-    [string]$Preset = "qwen36-35b-a3b",
+    [string]$Preset = "qwen36-27b",
 
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
     [string]$RemoteHost = "lanta",

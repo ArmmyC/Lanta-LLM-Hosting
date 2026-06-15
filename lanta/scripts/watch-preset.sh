@@ -4,7 +4,7 @@ set -euo pipefail
 # Optional login-node polling helper. Long-running watchdogs must comply with
 # cluster policy. Prefer the Windows watchdog when possible.
 
-PRESET=${PRESET:-qwen36-35b-a3b}
+PRESET=${PRESET:-qwen36-27b}
 CHECK_EVERY_SECONDS=${CHECK_EVERY_SECONDS:-300}
 ROOT=${ROOT:-/project/zz992000-zdevb/zz992005/ub127/SiliconCraft}
 JOB_NAME=${JOB_NAME:-vllm-model}

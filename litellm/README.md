@@ -27,6 +27,8 @@ Callers should always use the stable public alias:
 active-lanta-model
 ```
 
+The recommended daily RTL backend is `qwen36-27b`, which is also the template default. Keep the public alias stable so another preset can be swapped in without changing clients.
+
 Change the upstream vLLM model by editing `.env`:
 
 ```env

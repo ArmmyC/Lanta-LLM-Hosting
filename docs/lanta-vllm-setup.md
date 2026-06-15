@@ -1,5 +1,8 @@
 # Qwen3.6 vLLM on Lanta
 
+> [!NOTE]
+> This page documents the older Qwen3.6 setup flow. For daily RTL work, the current recommended preset is `bash scripts/submit-preset.sh qwen36-27b`; see `docs/default-rtl-model.md`. The stable local tunnel endpoint remains `http://127.0.0.1:8000/v1`, with one served model at a time.
+
 Project root: `/project/zz992000-zdevb/zz992005/ub127/SiliconCraft`
 
 ## Download model

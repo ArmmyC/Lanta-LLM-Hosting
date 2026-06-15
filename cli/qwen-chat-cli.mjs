@@ -5,8 +5,7 @@ import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
-const DEFAULT_MODEL =
-  "/project/zz992000-zdevb/zz992005/ub127/SiliconCraft/models/Qwen3.6-35B-A3B";
+const DEFAULT_MODEL = "qwen36-27b";
 
 function parseArgs(argv) {
   const options = {

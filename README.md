@@ -19,6 +19,8 @@ Private LLM hosting stack for serving a Lanta-hosted vLLM model through **OpenWe
 
 Lanta LLM Hosting is a small control plane for running one active Hugging Face model on Lanta Slurm and making it usable from a local Windows host.
 
+For daily RTL/SystemVerilog work, the recommended default backend is `qwen36-27b`. RLT-Benchmark Baseline v0.1 identifies it as the strongest overall registered public functional RTL generation baseline. See [Default RTL model](docs/default-rtl-model.md) for evidence and tradeoffs.
+
 It is designed around a simple split:
 
 | Component | Purpose |
@@ -114,7 +116,7 @@ Local service URLs:
 ### 1. Start the Lanta vLLM job
 
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
 ```
 
 Check the job:
@@ -230,20 +232,20 @@ Slurm jobs end when their time limit expires. The foreground watchdog can resubm
 Recommended Windows watchdog:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b
 ```
 
 One-shot dry run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-35b-a3b -Once -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b -Once -DryRun
 ```
 
 Optional Lanta-side polling wrapper:
 
 ```bash
 cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-bash scripts/watch-preset.sh --preset qwen36-35b-a3b
+bash scripts/watch-preset.sh --preset qwen36-27b
 ```
 
 > [!WARNING]
@@ -311,6 +313,7 @@ lanta-llm-hosting/
 - [Dashboard](dashboard/README.md)
 - [Command runbook](HOW_TO_USE.md)
 - [Model swap runbook](HOW_TO_SWAP.md)
+- [Default RTL model decision](docs/default-rtl-model.md)
 
 ## Troubleshooting
 

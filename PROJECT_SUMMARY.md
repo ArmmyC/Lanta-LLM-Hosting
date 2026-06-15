@@ -208,6 +208,8 @@ The job serves vLLM on port `8000` on the allocated GPU node.
 
 ## Model Preset System
 
+The current recommended default for daily RTL/SystemVerilog work is `qwen36-27b`, based on RLT-Benchmark Baseline v0.1 functional results. See `docs/default-rtl-model.md`. Runtime/job details later in this document are historical snapshots, not the current model recommendation.
+
 Model swapping is handled by:
 
 ```text
@@ -287,7 +289,7 @@ Known tested settings:
 | `qwen25-coder-32b` | `Qwen/Qwen2.5-Coder-32B-Instruct` | `qwen25-coder-32b` | `32768` | Tested working |
 | `deepseek-coder-v2-lite` | `deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct` | `deepseek-coder-v2-lite` | `32768` | Tested working, uses `--enforce-eager` |
 | `qwen36-35b-a3b` | `Qwen/Qwen3.6-35B-A3B` | `qwen36-35b-a3b` | `131072` | Tested working, uses Qwen reasoning parser |
-| `qwen36-27b` | `Qwen/Qwen3.6-27B` | `qwen36-27b` | `131072` | Previously used as baseline |
+| `qwen36-27b` | `Qwen/Qwen3.6-27B` | `qwen36-27b` | `131072` | Recommended daily RTL default |
 
 For Qwen reasoning models, responses may include a separate reasoning field. The test helper was updated to accept either `content`, `reasoning`, or `reasoning_content`.
 
@@ -312,10 +314,10 @@ Because Slurm jobs were submitted with a 9-hour runtime, the job may expire and 
 
 ## Core Commands
 
-Start or swap to Qwen3.6 35B A3B:
+Start or swap to Qwen3.6 27B, the recommended daily RTL default:
 
 ```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-35b-a3b"
+ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
 ```
 
 Start or swap to Qwen3 Coder 30B A3B:
