@@ -1,2 +1,1 @@
-"""Benchmark dashboard API."""
-
+"""Lanta platform status dashboard."""

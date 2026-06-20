@@ -40,10 +40,8 @@ tmp/
 temp/
 
 # LLM platform local state
-benchmark/artifacts/*
-!benchmark/artifacts/.gitkeep
-benchmark/results/
-benchmark/.local/
+# Preserve benchmark output left by the retired in-repo runner.
+/benchmark/
 dashboard/.local/
 *.sqlite
 *.sqlite3

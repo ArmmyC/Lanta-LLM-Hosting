@@ -18,7 +18,7 @@ The decision is based on the registered public functional RTL results in RLT-Ben
 
 The registered runs used matched settings within each benchmark mode. On this evidence, `qwen36-27b` is the strongest overall functional RTL generation baseline and remains the quality reference for daily work.
 
-Source: `RLT-Benchmark/reports/baseline_v0.1_public_rtl_benchmarks.md` and `RLT-Benchmark/docs/baseline_v0.1.md`.
+Source: [ArmmyC/RLTBench](https://github.com/ArmmyC/RLTBench).
 
 ## Alternatives
 
@@ -71,4 +71,4 @@ The alias is backed by `qwen36-27b` by default, but it must remain swappable. Af
      -d '{"model":"qwen36-27b","messages":[{"role":"user","content":"Return only synthesizable SystemVerilog for module rtl_smoke(input logic a, b, output logic y); assign y = a & b."}],"temperature":0,"max_tokens":128}'
    ```
 
-5. Use OpenWebUI, the website, or the API normally. Public clients should keep using `active-lanta-model` through LiteLLM.
+5. Use OpenWebUI or the API normally. Clients should keep using `active-lanta-model` through LiteLLM.

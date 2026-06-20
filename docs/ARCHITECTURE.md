@@ -1,93 +1,30 @@
-# Lanta LLM Platform Architecture
+# Architecture
 
-## Target Architecture
-
-```text
-User Browser
-  |
-  v
-OpenWebUI
-  |
-  v
-LiteLLM Proxy
-  |
-  v
-Local SSH Tunnel
-  |
-  v
-vLLM on Lanta Slurm
-  |
-  v
-Active Hugging Face model
-```
-
-Monitoring:
+## Request Path
 
 ```text
-LiteLLM /metrics
-Platform exporter /metrics
-  |
-  v
-Prometheus
-  |
-  v
-Grafana
+OpenWebUI or OpenAI-compatible client
+                 |
+                 v
+       LiteLLM :4000 (auth, alias, usage)
+                 |
+                 v
+       SSH tunnel :8000 (Windows host)
+                 |
+                 v
+       vLLM :8000 (Lanta compute node)
 ```
 
-Optional benchmarking:
+LiteLLM exposes `active-lanta-model` as the stable contract. The Lanta scripts
+choose the actual model, tensor parallelism, context length, and reasoning
+parser. The tunnel watchdog follows the active Slurm job across compute nodes.
 
-```text
-Benchmark Runner
-  |
-  v
-LiteLLM /v1/chat/completions
-  |
-  v
-Code extraction and evaluator checks
-  |
-  v
-PostgreSQL or local JSON fallback
-  |
-  v
-Benchmark Dashboard API
-```
+## Operations
 
-## Components
+- OpenWebUI is the supported browser interface.
+- LiteLLM owns API authentication, virtual keys, budgets, and usage metrics.
+- Prometheus scrapes LiteLLM and the platform exporter.
+- Grafana is the source of truth for usage and performance charts.
+- The status dashboard provides health checks and admin links only.
 
-- `lanta/scripts/`: keeps the existing Slurm/vLLM model serving and swap flow.
-- `windows/tunnel/`: keeps the existing auto-reconnecting local SSH tunnel.
-- `litellm/`: preferred OpenAI-compatible API gateway, virtual keys, usage, budgets, and metrics.
-- `openwebui/`: primary human chat UI.
-- `observability/`: Prometheus, Grafana, and platform exporter.
-- `benchmark/`: optional HDL benchmark cases, runner, evaluators, schemas, migrations, and artifacts.
-- `dashboard/`: lightweight `/status` admin landing page plus retained benchmark APIs. `/usage` only points admins to Grafana.
-- `website/`: existing fallback demo UI, intentionally retained.
-- `sharing/`: existing compatibility gateway, retained but no longer preferred.
-
-## Stable Endpoint Contract
-
-The active vLLM model is exposed locally through the tunnel at:
-
-```text
-http://127.0.0.1:8000/v1
-```
-
-LiteLLM routes to the Docker-visible form:
-
-```text
-http://host.docker.internal:8000/v1
-```
-
-Tools and users should call LiteLLM:
-
-```text
-http://127.0.0.1:4000/v1
-```
-
-The model alias exposed to users is:
-
-```text
-active-lanta-model
-```
-
-Only one Lanta vLLM model is served on port `8000` at a time in the current design.
+Raw vLLM is local infrastructure and must not be exposed to users.

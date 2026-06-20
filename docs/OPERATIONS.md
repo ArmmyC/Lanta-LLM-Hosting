@@ -1,362 +1,43 @@
-# Lanta LLM Platform Operations
+# Operations
 
 ## Startup Order
 
-1. Start Lanta vLLM job.
-2. Start tunnel.
+1. Submit or confirm the Lanta vLLM job.
+2. Start the Windows tunnel.
 3. Start LiteLLM.
 4. Start OpenWebUI.
-5. Start observability stack.
-6. Start the hosting dashboard.
-
-## First Local Run
-
-Create local environment files before starting the stack:
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-Copy-Item litellm\.env.example litellm\.env
-Copy-Item openwebui\.env.example openwebui\.env
-Copy-Item observability\.env.example observability\.env
-Copy-Item dashboard\.env.example dashboard\.env
-```
-
-Edit those `.env` files and change local secrets before use:
-
-- LiteLLM: `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY`, `POSTGRES_PASSWORD`, and `LITELLM_DATABASE_URL`
-- LiteLLM routing: `VLLM_MODEL_ID`, for example `openai/qwen36-27b`
-- OpenWebUI: the web UI secret/session settings
-- Observability: `GRAFANA_ADMIN_PASSWORD`
-
-OpenWebUI asks you to create the first admin account on first launch. That is normal. The OpenWebUI account is separate from LiteLLM API keys; OpenWebUI login controls the web UI, while LiteLLM keys control access to the model gateway.
-
-Set your local shell key for verification commands:
-
-```powershell
-$env:LITELLM_MASTER_KEY="sk-your-key"
-```
-
-Run the local platform check:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
-```
-
-Key management docs:
-
-```text
-docs/KEY_MANAGEMENT.md
-```
-
-## 1. Start Lanta vLLM
-
-```powershell
-ssh lanta "cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft && bash scripts/submit-preset.sh qwen36-27b"
-```
-
-Check status:
+5. Start observability and the status dashboard.
 
 ```powershell
 ssh lanta "squeue -u ub127"
+powershell -ExecutionPolicy Bypass -File .\windows\tunnel\start-lanta-vllm-tunnel.ps1
+docker compose -f litellm/docker-compose.yml up -d
+docker compose -f openwebui/docker-compose.yml up -d
+docker compose -f observability/docker-compose.yml up -d
+docker compose -f dashboard/docker-compose.yml up -d --build
 ```
 
-## Keeping the Lanta Job Alive
-
-### Option A: Windows Watchdog (Recommended)
-
-Run this foreground process from the repository root on the Windows host:
+## Health Checks
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b
-```
-
-Test the check path once without submitting anything:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\watch-lanta-job.ps1 -Preset qwen36-27b -Once -DryRun
-```
-
-The default interval is 300 seconds. Use `-CheckEverySeconds SECONDS` to change it; intervals below 30 seconds are rejected to prevent rapid resubmission loops.
-
-### Option B: Lanta Polling Wrapper (Optional)
-
-Use this foreground wrapper on the Lanta login node only if cluster policy permits lightweight long-running polling:
-
-```bash
-cd /project/zz992000-zdevb/zz992005/ub127/SiliconCraft
-bash scripts/watch-preset.sh --preset qwen36-27b
-```
-
-One-shot dry run:
-
-```bash
-bash scripts/watch-preset.sh --preset qwen36-27b --once --dry-run
-```
-
-Both watchdogs check only for a pending or running Slurm job named `vllm-model`. They do not cancel jobs and do not prove that vLLM has finished loading. After a resubmission, the model may need several minutes before port `8000` responds.
-
-The existing SSH tunnel can usually stay running because the remote service continues to use port `8000`. OpenWebUI and LiteLLM normally do not need restarting when the same endpoint and stable `active-lanta-model` alias are retained. Verify readiness and the complete local stack with:
-
-```powershell
-$env:LITELLM_MASTER_KEY="sk-your-key"
+powershell -ExecutionPolicy Bypass -File .\windows\tunnel\status-lanta-vllm-tunnel.ps1
+$env:LITELLM_MASTER_KEY = "sk-your-key"
 powershell -ExecutionPolicy Bypass -File .\scripts\check-platform.ps1
 ```
 
-The platform check verifies vLLM reachability; it does not report whether either watchdog process is running.
+Use:
 
-Stop either foreground watchdog with `Ctrl+C`. Avoid indefinite unattended GPU use when cluster policy does not allow it. When hosting is finished, stop the watchdog before running `scancel -n vllm-model` on Lanta.
+- http://127.0.0.1:8088/status for component health.
+- http://127.0.0.1:3002 for usage, latency, tokens, and errors.
+- http://127.0.0.1:9090 for raw Prometheus queries.
 
-## 2. Start Tunnel
+## Recovery
 
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting
-powershell -ExecutionPolicy Bypass -File .\windows\tunnel\start-lanta-vllm-tunnel.ps1
-powershell -ExecutionPolicy Bypass -File .\windows\tunnel\status-lanta-vllm-tunnel.ps1
-```
+- No Slurm job: submit a preset from `lanta/scripts/submit-preset.sh`.
+- Tunnel offline: run the stop script, then the start script.
+- LiteLLM model missing: verify its key, config, and tunnel health.
+- OpenWebUI provider stale: point it to `http://litellm:4000/v1` and retain
+  `active-lanta-model`.
 
-Expected endpoint:
-
-```text
-http://127.0.0.1:8000/v1
-```
-
-## 3. Start LiteLLM
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\litellm
-Copy-Item .env.example .env
-notepad .env
-docker compose up -d
-```
-
-Verify:
-
-```powershell
-curl.exe http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $env:LITELLM_MASTER_KEY"
-```
-
-Callers should use the stable public model alias:
-
-```text
-active-lanta-model
-```
-
-The upstream vLLM served model is controlled by `VLLM_MODEL_ID` in `litellm/.env`. The value must include LiteLLM's provider prefix and match the model returned by the vLLM tunnel, for example:
-
-```env
-VLLM_MODEL_ID=openai/qwen36-27b
-```
-
-After changing `.env`, recreate the container:
-
-```powershell
-docker compose up -d --force-recreate litellm
-```
-
-## 4. Start OpenWebUI
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\openwebui
-Copy-Item .env.example .env
-notepad .env
-docker compose up -d
-```
-
-Open:
-
-```text
-http://127.0.0.1:3000
-```
-
-If automatic provider configuration fails, add an OpenAI-compatible provider manually:
-
-```text
-Base URL: http://host.docker.internal:4000/v1
-API key: LiteLLM virtual key
-```
-
-## Share OpenWebUI with Tailscale Funnel
-
-OpenWebUI is the recommended public sharing target for friends who need browser chat.
-
-First stop any old Funnel route:
-
-```powershell
-tailscale funnel --https=443 off
-```
-
-Start Funnel to OpenWebUI:
-
-```powershell
-tailscale funnel --bg --https=443 http://127.0.0.1:3000
-tailscale funnel status
-```
-
-Expected status should point `/` to OpenWebUI:
-
-```text
-https://armmy.tail35169a.ts.net (Funnel on)
-|-- / proxy http://127.0.0.1:3000
-```
-
-Open the public URL:
-
-```powershell
-Start-Process https://armmy.tail35169a.ts.net
-```
-
-New users sign in through OpenWebUI. Keep signup set to pending/manual approval when sharing publicly, then approve invited users in the OpenWebUI admin panel. Disable signup again after invited users have accounts.
-
-Do not publicly Funnel these admin or internal services unless they are intentionally secured:
-
-```text
-vLLM:       http://127.0.0.1:8000
-LiteLLM:    http://127.0.0.1:4000
-Grafana:    http://127.0.0.1:3002
-Prometheus: http://127.0.0.1:9090
-Dashboard:  http://127.0.0.1:8088/status
-```
-
-API users should receive LiteLLM virtual keys. Expose LiteLLM publicly only when API access is actually needed and the key/budget/rate-limit policy is ready.
-
-## 5. Start Observability
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\observability
-docker compose up -d
-```
-
-Ports:
-
-```text
-Prometheus: http://127.0.0.1:9090
-Grafana: http://127.0.0.1:3002
-Platform exporter: http://127.0.0.1:9108
-```
-
-Grafana dashboard:
-
-```text
-Lanta LLM Operations
-```
-
-Hosting dashboard:
-
-```text
-Status: http://127.0.0.1:8088/status
-API:    http://127.0.0.1:8088/api/platform/status
-```
-
-Use Grafana at `http://127.0.0.1:3002` for request, token, latency, error, and usage charts. The custom dashboard is only an admin status/links page. Slurm and GPU panels are optional and remain empty until Lanta-side exporters are configured.
-
-## 6. Start Hosting Dashboard
-
-```powershell
-cd D:\ArmmyWorkspace\SiliconCraft\lanta-llm-hosting\dashboard
-docker compose up -d --build
-```
-
-Open:
-
-```text
-http://127.0.0.1:8088/status
-```
-
-`http://127.0.0.1:8088/usage` is a small link page that sends admins to Grafana. `/api/platform/usage` remains an experimental machine-readable diagnostic endpoint, not the primary dashboard.
-
-## LiteLLM Virtual Keys
-
-See [Key Management](KEY_MANAGEMENT.md) for the full admin and user flow. The short version is below.
-
-Create:
-
-```powershell
-curl.exe http://127.0.0.1:4000/key/generate `
-  -H "Authorization: Bearer $env:LITELLM_MASTER_KEY" `
-  -H "Content-Type: application/json" `
-  -d "{\"models\":[\"active-lanta-model\"],\"max_budget\":10}"
-```
-
-List:
-
-```powershell
-curl.exe http://127.0.0.1:4000/key/list -H "Authorization: Bearer $env:LITELLM_MASTER_KEY"
-```
-
-Revoke:
-
-```powershell
-curl.exe http://127.0.0.1:4000/key/delete `
-  -H "Authorization: Bearer $env:LITELLM_MASTER_KEY" `
-  -H "Content-Type: application/json" `
-  -d "{\"keys\":[\"sk-user-key\"]}"
-```
-
-“API generation” means creating and managing LiteLLM virtual keys.
-
-## Troubleshooting
-
-### `curl: (52) Empty reply from server`
-
-This usually means the container accepted a connection while LiteLLM was still starting, migrating its database, or restarting. Check:
-
-```powershell
-docker compose ps
-docker compose logs --tail=150 litellm
-```
-
-Wait 30-60 seconds after recreating LiteLLM before testing.
-
-### Wrong LiteLLM key
-
-If `/v1/models` returns 401, verify the key in your shell matches the key inside the running container:
-
-```powershell
-$env:LITELLM_MASTER_KEY="sk-your-key"
-docker compose exec litellm printenv
-```
-
-Do not paste secrets into issues or commits.
-
-### `.env` changed but Docker still uses old values
-
-Docker does not change environment variables inside an existing container after a plain restart. Recreate the service:
-
-```powershell
-docker compose up -d --force-recreate litellm
-```
-
-### Postgres password mismatch after changing `.env`
-
-The Postgres Docker volume keeps the password from first initialization. If you change `POSTGRES_PASSWORD` later, LiteLLM may fail database auth. For a local reset only when safe, remove the local volume:
-
-```powershell
-docker compose down -v
-docker compose up -d
-```
-
-This deletes the local LiteLLM database volume. Do not use it if you need to keep stored keys or usage history.
-
-### Wrong upstream model name
-
-If LiteLLM returns a model-not-found error from upstream, compare:
-
-```powershell
-curl.exe http://127.0.0.1:8000/v1/models
-```
-
-with `VLLM_MODEL_ID` in `litellm/.env`. If vLLM serves `qwen36-27b`, set:
-
-```env
-VLLM_MODEL_ID=openai/qwen36-27b
-```
-
-Then recreate LiteLLM:
-
-```powershell
-docker compose up -d --force-recreate litellm
-```
-
-## Compatibility Gateways
-
-The existing `website/` and `sharing/` flows remain available for demos and compatibility. OpenWebUI and LiteLLM are now the preferred paths for new chat and API users.
+Do not delete OpenWebUI volumes unless loss of users, chats, and settings is
+acceptable. Do not commit `.env` files or secret keys.

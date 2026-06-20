@@ -55,7 +55,7 @@ def status_page() -> HTMLResponse:
   </style>
 </head>
 <body>
-  <nav><a href="/status">Platform Status</a> | <a href="/usage">Usage in Grafana</a> | <a href="/benchmarks">Optional Benchmarks</a></nav>
+  <nav><a href="/status">Platform Status</a> | <a href="/usage">Usage in Grafana</a></nav>
   <h1>Lanta LLM Platform Status</h1>
   <div class="metric"><strong>Overall</strong><br>{escape(str(data['overall_status']))}</div>
   <div class="metric"><strong>Public alias</strong><br>{escape(str(data['model']['public_alias']))}</div>

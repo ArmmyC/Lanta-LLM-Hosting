@@ -7,7 +7,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .routers import benchmark_cases, benchmark_runs, health, pages, platform, summary
+from .routers import health, pages, platform
 
 
 def allowed_origins() -> list[str]:
@@ -25,9 +25,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-app.include_router(benchmark_runs.router)
-app.include_router(benchmark_cases.router)
-app.include_router(summary.router)
 app.include_router(platform.router)
 app.include_router(pages.router)
 

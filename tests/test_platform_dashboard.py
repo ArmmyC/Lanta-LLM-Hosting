@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from dashboard.backend.app import platform_status
+
+
+def test_dashboard_exposes_only_operational_routes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    main = (root / "dashboard/backend/app/main.py").read_text(encoding="utf-8")
+    pages = (root / "dashboard/backend/app/routers/pages.py").read_text(encoding="utf-8")
+    platform = (root / "dashboard/backend/app/routers/platform.py").read_text(encoding="utf-8")
+    health = (root / "dashboard/backend/app/routers/health.py").read_text(encoding="utf-8")
+    routes = main + pages + platform + health
+
+    for path in ("/", "/status", "/usage", "/api/healthz", "/api/platform/status", "/api/platform/usage"):
+        assert f'\"{path}\"' in routes
+    for path in ("/benchmarks", "/runs", "/cases", "/api/benchmark"):
+        assert f'\"{path}' not in routes
 
 
 def test_platform_status_response_shape(monkeypatch) -> None:
