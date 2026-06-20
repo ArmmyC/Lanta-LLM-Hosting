@@ -111,5 +111,9 @@ echo "Served model: $SERVED_MODEL_NAME"
 echo "Port: $PORT"
 echo "Max model length: $MAX_MODEL_LEN"
 echo "Run time: $RUN_TIME"
+echo "Reasoning parser: ${REASONING_PARSER:-none}"
 
-sbatch --time="$RUN_TIME" scripts/serve-model.sbatch
+sbatch \
+  --time="$RUN_TIME" \
+  --export=ALL,MODEL_REPO,MODEL_NAME,MODEL_DIR,SERVED_MODEL_NAME,PORT,TP,MAX_MODEL_LEN,GPU_MEMORY_UTILIZATION,REASONING_PARSER,EXTRA_VLLM_ARGS \
+  scripts/serve-model.sbatch

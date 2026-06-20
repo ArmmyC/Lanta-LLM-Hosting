@@ -29,3 +29,16 @@ def test_qwen36_27b_is_the_documented_and_configured_default() -> None:
     for preset in PRESETS:
         assert f"  {preset})" in preset_script
         assert preset in swap_guide
+
+
+def test_qwen36_presets_enable_reasoning_parser() -> None:
+    preset_script = read("lanta/scripts/submit-preset.sh")
+    serve_script = read("lanta/scripts/serve-model.sbatch")
+
+    assert "REASONING_PARSER=${REASONING_PARSER:-qwen3}" in preset_script
+    assert "--export=ALL,MODEL_REPO,MODEL_NAME,MODEL_DIR,SERVED_MODEL_NAME" in preset_script
+    assert "REASONING_PARSER,EXTRA_VLLM_ARGS" in preset_script
+    assert "Reasoning parser: ${REASONING_PARSER:-none}" in preset_script
+    assert "*Qwen3.6*|*Qwen3.5*|*qwen36-*|*qwen35-*)" in serve_script
+    assert 'args+=(--reasoning-parser "$REASONING_PARSER")' in serve_script
+    assert "Reasoning parser: ${REASONING_PARSER:-none}" in serve_script

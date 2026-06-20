@@ -118,17 +118,31 @@ while ($true) {
   Write-Host "  http://localhost:$LocalPort/v1 -> http://$Node`:$RemotePort/v1"
   Write-Host "Automatic reconnect is enabled. Press Ctrl+C to stop."
 
-  & ssh `
-    -N `
-    -o ExitOnForwardFailure=yes `
-    -o ServerAliveInterval=20 `
-    -o ServerAliveCountMax=3 `
-    -o TCPKeepAlive=yes `
-    -o ConnectTimeout=15 `
-    -L "$LocalPort`:$Node`:$RemotePort" `
-    lanta
+  $sshArguments = @(
+    "-N"
+    "-o", "ExitOnForwardFailure=yes"
+    "-o", "ServerAliveInterval=20"
+    "-o", "ServerAliveCountMax=3"
+    "-o", "TCPKeepAlive=yes"
+    "-o", "ConnectTimeout=15"
+    "-L", "$LocalPort`:$Node`:$RemotePort"
+    "lanta"
+  )
+  $sshProcess = Start-Process -FilePath "ssh.exe" -ArgumentList $sshArguments -NoNewWindow -PassThru
 
-  $exitCode = $LASTEXITCODE
+  while (-not $sshProcess.WaitForExit($RetryDelaySeconds * 1000)) {
+    if ([string]::IsNullOrWhiteSpace($requestedNode)) {
+      $currentNode = Find-VllmNode -RequestedNode "" -RequestedJobName $JobName
+      if (-not [string]::IsNullOrWhiteSpace($currentNode) -and $currentNode -ne $Node) {
+        Write-Host "vLLM moved from $Node to $currentNode. Reconnecting..."
+        Stop-Process -Id $sshProcess.Id -Force -ErrorAction SilentlyContinue
+        $sshProcess.WaitForExit()
+        break
+      }
+    }
+  }
+
+  $exitCode = $sshProcess.ExitCode
   if ($Once) {
     exit $exitCode
   }

@@ -12,6 +12,21 @@ $watchdogPath = Join-Path $PSScriptRoot "open-lanta-vllm-tunnel.ps1"
 
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
+# Recover from a stale/missing PID file without starting a competing watchdog.
+$escapedWatchdogPath = [regex]::Escape($watchdogPath)
+$existingWatchdog = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+  Where-Object {
+    $_.CommandLine -match $escapedWatchdogPath -and
+    $_.CommandLine -match "-LocalPort\s+$LocalPort(?:\s|$)"
+  } |
+  Select-Object -First 1
+
+if ($existingWatchdog) {
+  Set-Content -Path $pidPath -Value $existingWatchdog.ProcessId
+  Write-Host "Lanta tunnel watchdog is already running (PID $($existingWatchdog.ProcessId))."
+  exit 0
+}
+
 if (Test-Path $pidPath) {
   $existingPid = Get-Content $pidPath -ErrorAction SilentlyContinue
   if ($existingPid -and (Get-Process -Id $existingPid -ErrorAction SilentlyContinue)) {
@@ -40,6 +55,12 @@ $process = Start-Process `
   -RedirectStandardOutput $stdoutPath `
   -RedirectStandardError $stderrPath `
   -PassThru
+
+Start-Sleep -Milliseconds 750
+if ($process.HasExited) {
+  Write-Error "Lanta tunnel watchdog failed to start. See $stderrPath"
+  exit $process.ExitCode
+}
 
 Set-Content -Path $pidPath -Value $process.Id
 Write-Host "Lanta tunnel watchdog started (PID $($process.Id))."

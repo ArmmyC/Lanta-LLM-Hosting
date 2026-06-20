@@ -32,6 +32,12 @@ REASONING_PARSER=${REASONING_PARSER:-}
 TRUST_REMOTE_CODE=${TRUST_REMOTE_CODE:-1}
 EXTRA_VLLM_ARGS=${EXTRA_VLLM_ARGS:-}
 
+case "$MODEL_REPO $MODEL_NAME $SERVED_MODEL_NAME" in
+  *Qwen3.6*|*Qwen3.5*|*qwen36-*|*qwen35-*)
+    REASONING_PARSER=${REASONING_PARSER:-qwen3}
+    ;;
+esac
+
 cd "$ROOT"
 mkdir -p logs tmp models/.hf-cache
 
@@ -88,5 +94,6 @@ echo "Serving model repo: $MODEL_REPO"
 echo "Model path: $MODEL_ID"
 echo "Served model name: $SERVED_MODEL_NAME"
 echo "Port: $PORT"
+echo "Reasoning parser: ${REASONING_PARSER:-none}"
 
 exec "$ENV/bin/vllm" "${args[@]}"
